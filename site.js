@@ -69,17 +69,14 @@ donationButtons.forEach(btn => btn.addEventListener('click', () => {
 applySettings();
 
 /* --------------------------------------------------------------------------
-   ClipFree relevance + mobile popup reliability patch
-   - Rejects false-positive military "African Lion" footage for animal searches.
-   - Ranks true animal footage first.
-   - Prefers smaller files for more reliable Android processing.
-   - Opens/refreshes Google authorization directly from the user's batch click
-     before long searches/downloads, avoiding mobile popup blockers.
-   - Skips a broken source and keeps looking instead of stopping the whole batch.
+   ClipFree verified animal catalog + mobile popup reliability patch
    -------------------------------------------------------------------------- */
 
 (() => {
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const PAGE_SIZE = 12;
+  const MAX_FILE_BYTES = 36 * 1024 * 1024;
+  const SEARCH_PAGE_SIZE = 50;
 
   async function waitForClipFree(timeout = 12000) {
     const start = Date.now();
@@ -96,107 +93,26 @@ applySettings();
     }[ch]));
   }
 
-  function cleanWords(value = '') {
-    return String(value).toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, ' ')
-      .split(/\s+/)
-      .map(x => x.trim())
-      .filter(x => x.length >= 3);
+  function stripHtml(value = '') {
+    const box = document.createElement('div');
+    box.innerHTML = String(value || '');
+    return (box.textContent || box.innerText || '').replace(/\s+/g, ' ').trim();
   }
 
-  const FALSE_POSITIVE_RE = /\b(army|soldiers?|military|armed forces|u\.?s\.? forces|special operations?|weapon|weapons|rifle|rifles|machine gun|combat|casualty|casualties|aeromedical|evacuation|training|exercise african lion|african lion 20\d{2}|qualification|tactical|b-roll|mtrs|nato|setaf|morocco|tunisian|tunisia|maneuver|lethality|warfare)\b/i;
-  const ANIMAL_CONTEXT_RE = /\b(wildlife|animal|animals|nature|zoo|safari|savanna|habitat|predator|mammal|rescue|sanctuary|national park|refuge|forest|wild)\b/i;
-
-  const SPECIES = {
-    lion: {
-      query: /\b(lion|lions|lioness|lionesses|lion cub|lion cubs|panthera leo)\b/i,
-      text: /\b(lion|lions|lioness|lionesses|lion cub|lion cubs|panthera leo|pride of lions)\b/i,
-      searches: ['lion wildlife animal', 'Panthera leo wildlife', 'lioness lion cub wildlife', 'lions savanna wildlife']
-    },
-    cat: {
-      query: /\b(cat|cats|kitten|kittens|feline)\b/i,
-      text: /\b(cat|cats|kitten|kittens|feline|domestic cat)\b/i,
-      searches: ['cute kittens cats', 'kitten playing cat', 'domestic cat kitten']
-    },
-    dog: {
-      query: /\b(dog|dogs|puppy|puppies|canine)\b/i,
-      text: /\b(dog|dogs|puppy|puppies|canine|domestic dog)\b/i,
-      searches: ['cute puppies dogs', 'puppy playing dog', 'domestic dog puppy']
-    },
-    tiger: {
-      query: /\b(tiger|tigers)\b/i,
-      text: /\b(tiger|tigers|panthera tigris)\b/i,
-      searches: ['tiger wildlife animal', 'Panthera tigris wildlife']
-    },
-    elephant: {
-      query: /\b(elephant|elephants)\b/i,
-      text: /\b(elephant|elephants|loxodonta|elephas)\b/i,
-      searches: ['elephant wildlife animal', 'elephants safari wildlife']
-    },
-    wolf: {
-      query: /\b(wolf|wolves)\b/i,
-      text: /\b(wolf|wolves|canis lupus)\b/i,
-      searches: ['wolf wildlife animal', 'wolves nature wildlife']
-    },
-    bear: {
-      query: /\b(bear|bears)\b/i,
-      text: /\b(bear|bears|ursus)\b/i,
-      searches: ['bear wildlife animal', 'bears nature wildlife']
-    },
-  };
-
-  function profileFor(query = '') {
-    for (const [name, profile] of Object.entries(SPECIES)) {
-      if (profile.query.test(query)) return { name, ...profile };
-    }
-    return null;
+  function cleanTitle(value = '') {
+    return String(value || '')
+      .replace(/^File:/i, '')
+      .replace(/\.(webm|mp4|mov|ogg|ogv|mkv)$/i, '')
+      .replace(/[_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
-  function isAnimalIntent(query = '') {
-    return Boolean(profileFor(query) || /\b(animal|animals|wildlife|pet|pets|nature|safari|zoo|kitten|puppy)\b/i.test(query));
+  function normalize(value = '') {
+    return stripHtml(String(value || '')).toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
-  function searchableText(item) {
-    return `${item?.title || ''} ${item?.creator || ''} ${item?.attribution || ''}`;
-  }
-
-  function relevanceScore(item, query) {
-    const text = searchableText(item);
-    if (FALSE_POSITIVE_RE.test(text)) return -1000;
-
-    const profile = profileFor(query);
-    const words = [...new Set(cleanWords(query).filter(w => !['with','from','into','this','that','video','shorts'].includes(w)))];
-    let score = 0;
-
-    if (profile) {
-      if (profile.text.test(text)) score += 9;
-      else return -1000; // species searches must actually mention the animal
-    } else if (isAnimalIntent(query)) {
-      if (ANIMAL_CONTEXT_RE.test(text)) score += 5;
-      else {
-        const anySpecies = Object.values(SPECIES).some(p => p.text.test(text));
-        if (anySpecies) score += 5;
-        else return -1000;
-      }
-    }
-
-    for (const word of words) {
-      const singular = word.endsWith('s') ? word.slice(0, -1) : word;
-      if (new RegExp(`\\b${singular}s?\\b`, 'i').test(text)) score += 2;
-    }
-
-    if (ANIMAL_CONTEXT_RE.test(text)) score += 3;
-
-    const mb = Number(item?.size || 0) / 1024 / 1024;
-    if (mb > 0 && mb <= 12) score += 3;
-    else if (mb <= 22) score += 2;
-    else if (mb <= 32) score += 1;
-    else if (mb > 36) score -= 5;
-
-    return score;
-  }
-
-  function uniqueItems(items) {
+  function unique(items) {
     const seen = new Set();
     return items.filter(item => {
       const key = item?.fileUrl || item?.sourceUrl || item?.title;
@@ -206,143 +122,513 @@ applySettings();
     });
   }
 
-  async function installPatch() {
-    const yt = await waitForClipFree();
-    if (!yt) return;
+  const BAD_CONTEXT_RE = /\b(?:army|soldiers?|military|armed forces|air force|navy|marines?|special operations?|weapons?|rifles?|machine gun|combat|casualt(?:y|ies)|aeromedical|evacuation|tactical|nato|setaf|maneuver|warfare|exercise african lion|african lion 20\d{2}|lion air|airline|airlines|airways|aviation|aircraft|airplane|aeroplane|flight|crash|crash site|airport|metro[- ]goldwyn|goldwyn|mgm|trademark|logo|intro|motion picture|movie|film studio|film company|production company|mascot|football club|sports club|rugby|hotel|restaurant|pub|brewery|ship|vessel|locomotive|train|automobile|car model|motorcycle|software|company|brand)\b/i;
 
-    if (yt.__clipfreeRelevancePatchInstalled) return;
-    yt.__clipfreeRelevancePatchInstalled = true;
+  const ANIMAL_CONTEXT_RE = /\b(?:wildlife|animal|animals|nature|zoo|safari|savanna|habitat|predator|mammal|sanctuary|national park|refuge|forest|wild|fauna|zoology|carnivore|panthera|felidae|canidae|ursidae|elephantidae)\b/i;
 
-    const originalSearch = yt.searchCommonsDownloadable.bind(yt);
+  const ACTIONS = {
+    fight: {
+      query: /\b(fight|fights|fighting|clash|clashes|battle|battling)\b/i,
+      evidence: /\b(fight|fights|fighting|clash|clashes|battle|battling|sparring)\b/i,
+      searches: ['lion fight', 'lions fighting', 'lion battle', 'lion clash', 'lion sparring']
+    },
+    hunt: {
+      query: /\b(hunt|hunting|chase|chasing|attack|attacking)\b/i,
+      evidence: /\b(hunt|hunting|chase|chasing|attack|attacking|predation|prey)\b/i,
+      searches: ['lion hunting', 'lions hunting', 'lion chase', 'lion attack']
+    },
+    roar: {
+      query: /\b(roar|roars|roaring)\b/i,
+      evidence: /\b(roar|roars|roaring|vocalizing|vocalisation|vocalization)\b/i,
+      searches: ['lion roar', 'lion roaring']
+    },
+    play: {
+      query: /\b(play|plays|playing|playful)\b/i,
+      evidence: /\b(play|plays|playing|playful)\b/i,
+      searches: ['lion playing', 'lion cubs playing']
+    }
+  };
 
-    async function strictSearch(query, limit = 12) {
-      const rawQuery = String(query || '').trim();
-      if (!rawQuery) return originalSearch(query, limit);
+  const SPECIES = {
+    lion: {
+      query: /\b(lion|lions|lioness|lionesses|lion cubs?|panthera leo)\b/i,
+      evidence: /\b(lion|lions|lioness|lionesses|lion cubs?|panthera leo|pride of lions)\b/i,
+      label: 'lion',
+      searches: ['lion wildlife', 'Panthera leo', 'lioness wildlife', 'lion cub wildlife', 'lions savanna', 'lion national park', 'lion safari', 'lion pride wildlife']
+    },
+    kitten: {
+      query: /\b(kitten|kittens|cat|cats|feline)\b/i,
+      evidence: /\b(kitten|kittens|domestic cat|felis catus|cat playing|cats playing)\b/i,
+      label: 'kitten',
+      searches: ['cute kittens', 'kitten playing', 'Felis catus kitten', 'domestic cat kitten']
+    },
+    puppy: {
+      query: /\b(puppy|puppies|dog|dogs|canine)\b/i,
+      evidence: /\b(puppy|puppies|domestic dog|canis familiaris|dog playing|dogs playing)\b/i,
+      label: 'puppy',
+      searches: ['cute puppies', 'puppy playing', 'domestic dog puppy', 'young dog playing']
+    },
+    tiger: {
+      query: /\b(tiger|tigers|panthera tigris)\b/i,
+      evidence: /\b(tiger|tigers|panthera tigris)\b/i,
+      label: 'tiger',
+      searches: ['tiger wildlife', 'Panthera tigris', 'tiger national park', 'tiger safari']
+    },
+    elephant: {
+      query: /\b(elephant|elephants|loxodonta|elephas)\b/i,
+      evidence: /\b(elephant|elephants|loxodonta|elephas)\b/i,
+      label: 'elephant',
+      searches: ['elephant wildlife', 'African elephant wildlife', 'Asian elephant wildlife', 'elephant safari']
+    },
+    wolf: {
+      query: /\b(wolf|wolves|canis lupus)\b/i,
+      evidence: /\b(wolf|wolves|canis lupus)\b/i,
+      label: 'wolf',
+      searches: ['wolf wildlife', 'wolves wildlife', 'Canis lupus', 'wolf national park']
+    },
+    bear: {
+      query: /\b(bear|bears|ursus)\b/i,
+      evidence: /\b(bear|bears|ursus|brown bear|black bear|polar bear)\b/i,
+      label: 'bear',
+      searches: ['bear wildlife', 'brown bear wildlife', 'black bear wildlife', 'polar bear wildlife']
+    }
+  };
 
-      if (!isAnimalIntent(rawQuery)) {
-        const plain = await originalSearch(rawQuery, Math.min(20, Math.max(limit, 12)));
-        return plain
-          .filter(item => !FALSE_POSITIVE_RE.test(searchableText(item)))
-          .filter(item => !item.size || item.size <= 36 * 1024 * 1024)
-          .sort((a,b) => Number(a.size || 0) - Number(b.size || 0))
-          .slice(0, limit);
-      }
+  function detectSpecies(query = '') {
+    return Object.values(SPECIES).find(profile => profile.query.test(query)) || null;
+  }
 
-      const profile = profileFor(rawQuery);
-      const searches = [
-        `${rawQuery} wildlife animal`,
-        ...(profile?.searches || []),
-        rawQuery
-      ];
+  function detectAction(query = '') {
+    return Object.values(ACTIONS).find(action => action.query.test(query)) || null;
+  }
 
-      const gathered = [];
-      for (const q of [...new Set(searches)]) {
-        try {
-          const found = await originalSearch(q, 20);
-          gathered.push(...found);
-        } catch (err) {
-          console.warn('ClipFree relevance search skipped one query', q, err);
+  function metaValue(meta, key) {
+    return stripHtml(meta?.[key]?.value || '');
+  }
+
+  function commonsFilePageUrl(title) {
+    return `https://commons.wikimedia.org/wiki/${encodeURIComponent(String(title || '').replace(/ /g, '_')).replace(/%2F/g, '/')}`;
+  }
+
+  function simpleReuseLicense(license = '') {
+    const value = String(license || '').toLowerCase();
+    return value.includes('public domain') || value.includes('cc0') ||
+      ((value.includes('cc by') || value.includes('creative commons attribution')) &&
+       !value.includes('by-sa') && !value.includes('share alike'));
+  }
+
+  function pageToItem(page) {
+    const info = page?.imageinfo?.[0] || {};
+    const meta = info.extmetadata || {};
+    const rawTitle = String(page?.title || '').replace(/^File:/i, '');
+    const creator = metaValue(meta, 'Artist') || metaValue(meta, 'Credit') || 'Wikimedia Commons contributor';
+    const license = metaValue(meta, 'LicenseShortName') || metaValue(meta, 'UsageTerms') || 'See source page';
+    const licenseUrl = metaValue(meta, 'LicenseUrl');
+    const description = [
+      metaValue(meta, 'ImageDescription'),
+      metaValue(meta, 'ObjectName'),
+      metaValue(meta, 'Categories'),
+    ].filter(Boolean).join(' ');
+    const categories = (page?.categories || []).map(x => String(x?.title || '').replace(/^Category:/i, '')).filter(Boolean);
+    const sourceUrl = commonsFilePageUrl(page?.title || '');
+    return {
+      title: rawTitle,
+      cleanTitle: cleanTitle(rawTitle),
+      creator,
+      license,
+      licenseUrl,
+      sourceUrl,
+      fileUrl: info.url || '',
+      thumbUrl: info.thumburl || '',
+      mime: info.mime || 'video/webm',
+      size: Number(info.size || 0),
+      description,
+      categories,
+      provider: 'Wikimedia Commons',
+      attribution: `“${cleanTitle(rawTitle)}” — ${creator}. Source: Wikimedia Commons. Licence: ${license}${licenseUrl ? ` (${licenseUrl})` : ''}. ${sourceUrl}`,
+    };
+  }
+
+  function itemText(item) {
+    return normalize([
+      item?.cleanTitle || item?.title,
+      item?.description,
+      ...(item?.categories || []),
+      item?.creator
+    ].filter(Boolean).join(' '));
+  }
+
+  function classifyItem(item, query) {
+    const text = itemText(item);
+    const species = detectSpecies(query);
+    const action = detectAction(query);
+
+    if (!item?.fileUrl || (item.size && item.size > MAX_FILE_BYTES)) return null;
+    if (!simpleReuseLicense(item.license)) return null;
+    if (BAD_CONTEXT_RE.test(text)) return null;
+
+    if (species && !species.evidence.test(text)) return null;
+    if (!species && /\b(animal|wildlife|nature|safari|zoo)\b/i.test(query)) {
+      const speciesHit = Object.values(SPECIES).some(p => p.evidence.test(text));
+      if (!speciesHit && !ANIMAL_CONTEXT_RE.test(text)) return null;
+    }
+
+    const exactAction = action ? action.evidence.test(text) : true;
+    let score = 0;
+
+    if (species?.evidence.test(text)) score += 40;
+    if (ANIMAL_CONTEXT_RE.test(text)) score += 12;
+    if (action && exactAction) score += 32;
+    if (action && !exactAction) score -= 5;
+
+    const queryWords = normalize(query).split(/\s+/).filter(w => w.length >= 3);
+    for (const word of queryWords) {
+      const singular = word.endsWith('s') && word.length > 4 ? word.slice(0, -1) : word;
+      if (new RegExp(`\\b${singular}s?\\b`, 'i').test(text)) score += 3;
+    }
+
+    const mb = Number(item.size || 0) / 1024 / 1024;
+    if (mb > 0 && mb <= 8) score += 8;
+    else if (mb <= 16) score += 6;
+    else if (mb <= 24) score += 4;
+    else if (mb <= 32) score += 2;
+
+    item.matchType = action ? (exactAction ? 'exact' : 'related') : 'exact';
+    item.relevanceScore = score;
+    return item;
+  }
+
+  function buildSearchVariants(query) {
+    const raw = String(query || '').trim();
+    const species = detectSpecies(raw);
+    const action = detectAction(raw);
+    const variants = [];
+
+    if (species && action) {
+      const animal = species.label;
+      const customActionTerms = action.searches.map(x => x.replace(/\blion(s)?\b/ig, animal));
+      variants.push(...customActionTerms);
+    }
+
+    variants.push(raw);
+    if (species) variants.push(...species.searches, `${species.label} wildlife video`, `${species.label} animal nature`);
+
+    return [...new Set(variants.map(x => x.trim()).filter(Boolean))].slice(0, 10);
+  }
+
+  async function fetchCommonsSearchPage(searchTerm, offset = 0) {
+    const url = new URL('https://commons.wikimedia.org/w/api.php');
+    const params = {
+      action: 'query',
+      generator: 'search',
+      gsrsearch: `${searchTerm} filetype:video`,
+      gsrnamespace: '6',
+      gsrlimit: String(SEARCH_PAGE_SIZE),
+      prop: 'imageinfo|categories',
+      iiprop: 'url|size|mime|mediatype|extmetadata',
+      iiurlwidth: '640',
+      cllimit: '50',
+      format: 'json',
+      formatversion: '2',
+      origin: '*',
+    };
+    if (offset > 0) params.gsroffset = String(offset);
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+
+    const response = await fetch(url.toString(), { mode:'cors', cache:'no-store' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.error) throw new Error(data?.error?.info || `Wikimedia search failed (${response.status}).`);
+
+    return {
+      items: (data?.query?.pages || []).map(pageToItem),
+      nextOffset: Number(data?.continue?.gsroffset ?? -1),
+    };
+  }
+
+  const catalog = {
+    query: '',
+    variants: [],
+    offsets: new Map(),
+    exhausted: new Set(),
+    results: [],
+    byKey: new Map(),
+    page: 1,
+    candidatesSeen: 0,
+    loading: false,
+  };
+
+  function resetCatalog(query) {
+    catalog.query = String(query || '').trim();
+    catalog.variants = buildSearchVariants(catalog.query);
+    catalog.offsets = new Map(catalog.variants.map(v => [v, 0]));
+    catalog.exhausted = new Set();
+    catalog.results = [];
+    catalog.byKey = new Map();
+    catalog.page = 1;
+    catalog.candidatesSeen = 0;
+    catalog.loading = false;
+  }
+
+  async function runLimited(tasks, width = 3) {
+    const out = [];
+    for (let i = 0; i < tasks.length; i += width) {
+      const chunk = tasks.slice(i, i + width);
+      const settled = await Promise.allSettled(chunk.map(fn => fn()));
+      out.push(...settled);
+    }
+    return out;
+  }
+
+  async function loadCatalogRound() {
+    if (catalog.loading) return;
+    catalog.loading = true;
+    try {
+      const jobs = catalog.variants
+        .filter(v => !catalog.exhausted.has(v))
+        .map(variant => async () => {
+          const offset = catalog.offsets.get(variant) || 0;
+          const page = await fetchCommonsSearchPage(variant, offset);
+          return { variant, ...page };
+        });
+
+      if (!jobs.length) return;
+
+      const settled = await runLimited(jobs, 3);
+      for (const result of settled) {
+        if (result.status !== 'fulfilled') continue;
+        const { variant, items, nextOffset } = result.value;
+        catalog.candidatesSeen += items.length;
+
+        for (const raw of items) {
+          const item = classifyItem(raw, catalog.query);
+          if (!item) continue;
+          const key = item.fileUrl || item.sourceUrl || item.title;
+          const existing = catalog.byKey.get(key);
+          if (!existing || item.relevanceScore > existing.relevanceScore) catalog.byKey.set(key, item);
         }
-        if (gathered.length >= 45) break;
+
+        if (nextOffset >= 0) catalog.offsets.set(variant, nextOffset);
+        else catalog.exhausted.add(variant);
       }
 
-      return uniqueItems(gathered)
-        .map(item => ({ item, score: relevanceScore(item, rawQuery) }))
-        .filter(x => x.score >= 5)
-        .filter(x => !x.item.size || x.item.size <= 36 * 1024 * 1024)
-        .sort((a,b) => b.score - a.score || Number(a.item.size || 0) - Number(b.item.size || 0))
-        .map(x => x.item)
-        .slice(0, Math.max(1, Math.min(20, limit)));
+      catalog.results = [...catalog.byKey.values()].sort((a,b) => {
+        if (a.matchType !== b.matchType) return a.matchType === 'exact' ? -1 : 1;
+        return Number(b.relevanceScore || 0) - Number(a.relevanceScore || 0) || Number(a.size || 0) - Number(b.size || 0);
+      });
+    } finally {
+      catalog.loading = false;
     }
+  }
 
-    yt.searchCommonsDownloadable = strictSearch;
+  function exactResults() {
+    return catalog.results.filter(x => x.matchType === 'exact');
+  }
 
-    function connectedNow() {
-      const disconnect = document.getElementById('disconnectYoutube');
-      const status = document.getElementById('youtubeConnectionStatus')?.textContent || '';
-      return Boolean((disconnect && !disconnect.classList.contains('hidden')) || /^Connected to /i.test(status.trim()));
-    }
+  function ensureCatalogUi() {
+    const root = document.getElementById('commonsResults');
+    if (!root) return null;
 
-    async function connectFromUserClick() {
-      // Calling this before any long search/download keeps the OAuth popup tied
-      // to the user's actual tap, which mobile browsers are much less likely to block.
-      await yt.connectYoutube();
-      if (!connectedNow()) {
-        throw new Error('YouTube connection did not finish. Tap Connect YouTube once, approve Google access, then try FULL AUTO again.');
+    let controls = document.getElementById('clipfreeCatalogControls');
+    if (controls) return controls;
+
+    const style = document.createElement('style');
+    style.textContent = `
+      .clipfree-catalog-summary{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+      .clipfree-catalog-summary strong{font-size:.95rem}.clipfree-catalog-summary span{color:#9393a3;font-size:.78rem}
+      .clipfree-match-badge{display:inline-flex;padding:4px 7px;border-radius:999px;font-size:.68rem;font-weight:800;margin-bottom:7px}
+      .clipfree-match-badge.exact{background:#102319;color:#8ee0aa;border:1px solid #315941}
+      .clipfree-match-badge.related{background:#2a2111;color:#ffd080;border:1px solid #6a5725}
+      .clipfree-pagination{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:16px 0}
+      .clipfree-pagination button{min-width:38px;padding:9px 11px;border-radius:9px;border:1px solid #343443;background:#14141d;color:#fff}
+      .clipfree-pagination button.active{background:#6f55ef;border-color:#8b76ff}
+      .clipfree-pagination button:disabled{opacity:.4}
+      .clipfree-load-more{width:100%;margin:6px 0 18px}
+    `;
+    document.head.appendChild(style);
+
+    controls = document.createElement('div');
+    controls.id = 'clipfreeCatalogControls';
+    controls.innerHTML = `
+      <div class="clipfree-catalog-summary">
+        <strong data-catalog-count>0 verified matches</strong>
+        <span data-catalog-seen>0 candidates checked</span>
+      </div>
+      <div class="clipfree-pagination" data-catalog-pagination></div>
+      <button type="button" class="secondary clipfree-load-more" data-catalog-more>Load more matching videos</button>
+    `;
+    root.parentNode.insertBefore(controls, root.nextSibling);
+
+    controls.querySelector('[data-catalog-more]').addEventListener('click', async () => {
+      const btn = controls.querySelector('[data-catalog-more]');
+      btn.disabled = true;
+      btn.textContent = 'Searching more Wikimedia pages…';
+      try {
+        await loadCatalogRound();
+        renderCatalog();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Load more matching videos';
       }
+    });
+
+    return controls;
+  }
+
+  function setNotice(el, text, kind = 'subtle') {
+    if (!el) return;
+    el.className = `notice ${kind}`;
+    el.textContent = text;
+  }
+
+  function setAutoStatus(title, detail, progress = null, kind = 'subtle') {
+    const t = document.getElementById('autoStatusText');
+    const d = document.getElementById('autoStatusDetail');
+    const p = document.getElementById('autoProgressBar');
+    if (t) t.textContent = title;
+    if (d) {
+      d.className = `notice ${kind}`;
+      d.textContent = detail;
     }
+    if (p && progress != null) p.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+  }
 
-    async function downloadReliable(item, index = 0) {
-      const response = await fetch(item.fileUrl, { mode: 'cors', cache: 'no-store' });
-      if (!response.ok) throw new Error(`Download failed (${response.status}).`);
-      const blob = await response.blob();
-      if (!blob.size) throw new Error('The source returned an empty video file.');
-      if (blob.size > 36 * 1024 * 1024) throw new Error('Source is too large for reliable phone processing.');
+  let yt = null;
 
-      const raw = String(item.title || `animal-${index}.webm`);
-      const ext = raw.match(/\.([a-z0-9]{2,5})$/i)?.[1]
-        || (String(item.mime).includes('mp4') ? 'mp4' : String(item.mime).includes('ogg') ? 'ogv' : 'webm');
-      const base = raw.replace(/\.[^.]+$/, '').replace(/[^a-z0-9 _.-]+/gi, '').trim().slice(0, 70) || `animal-${index}`;
-      return new File([blob], `${base}.${ext}`, { type: item.mime || blob.type || 'video/webm' });
-    }
+  function connectedNow() {
+    const disconnect = document.getElementById('disconnectYoutube');
+    const status = document.getElementById('youtubeConnectionStatus')?.textContent || '';
+    return Boolean((disconnect && !disconnect.classList.contains('hidden')) || /^Connected to /i.test(status.trim()));
+  }
 
-    function setNotice(el, text, kind = 'subtle') {
-      if (!el) return;
-      el.className = `notice ${kind}`;
-      el.textContent = text;
-    }
+  async function connectFromUserClick() {
+    if (!yt) yt = await waitForClipFree();
+    if (!yt) throw new Error('ClipFree YouTube tools did not finish loading.');
+    await yt.connectYoutube();
+    if (!connectedNow()) throw new Error('YouTube connection did not finish. Approve Google access, then try FULL AUTO again.');
+  }
 
-    function setAutoStatus(title, detail, progress = null, kind = 'subtle') {
-      const t = document.getElementById('autoStatusText');
-      const d = document.getElementById('autoStatusDetail');
-      const p = document.getElementById('autoProgressBar');
-      if (t) t.textContent = title;
-      if (d) {
-        d.className = `notice ${kind}`;
-        d.textContent = detail;
-      }
-      if (p && progress != null) p.style.width = `${Math.max(0, Math.min(100, progress))}%`;
-    }
+  async function downloadReliable(item, index = 0) {
+    const response = await fetch(item.fileUrl, { mode:'cors', cache:'no-store' });
+    if (!response.ok) throw new Error(`Download failed (${response.status}).`);
+    const blob = await response.blob();
+    if (!blob.size) throw new Error('The source returned an empty video file.');
+    if (blob.size > MAX_FILE_BYTES) throw new Error('Source is too large for reliable phone processing.');
 
-    function renderResults(items) {
-      const root = document.getElementById('commonsResults');
-      if (!root) return;
-      window.__clipfreeCommonsResults = items;
+    const raw = String(item.title || `animal-${index}.webm`);
+    const ext = raw.match(/\.([a-z0-9]{2,5})$/i)?.[1] || (String(item.mime).includes('mp4') ? 'mp4' : String(item.mime).includes('ogg') ? 'ogv' : 'webm');
+    const base = cleanTitle(raw).replace(/[^a-z0-9 _.-]+/gi, '').trim().slice(0, 70) || `animal-${index}`;
+    return new File([blob], `${base}.${ext}`, { type:item.mime || blob.type || 'video/webm' });
+  }
 
-      if (!items.length) {
-        root.innerHTML = '<div class="notice subtle">No true animal matches were found. ClipFree filtered unrelated military/training results. Try a simpler animal topic such as “lions”, “lion cubs”, “kittens” or “puppies”.</div>';
-        return;
-      }
+  function renderCatalog() {
+    const root = document.getElementById('commonsResults');
+    const controls = ensureCatalogUi();
+    if (!root || !controls) return;
 
-      root.innerHTML = items.map((item, index) => `
-        <article class="video-result">
-          ${item.thumbUrl ? `<img src="${esc(item.thumbUrl)}" alt="" loading="lazy" />` : ''}
-          <div class="result-body">
-            <h3>${esc(String(item.title || '').replace(/\.[a-z0-9]{2,5}$/i, ''))}</h3>
-            <p>${esc(item.creator || 'Wikimedia Commons')} • ${esc(item.license || '')}${item.size ? ` • ${(item.size / 1024 / 1024).toFixed(1)} MB` : ''}</p>
-            <div class="result-actions">
-              <button data-patch-use="${index}">Use + FULL AUTO</button>
-              <a href="${esc(item.sourceUrl || '#')}" target="_blank" rel="noopener">Open source</a>
+    window.__clipfreeCommonsResults = catalog.results;
+
+    const totalPages = Math.max(1, Math.ceil(catalog.results.length / PAGE_SIZE));
+    catalog.page = Math.min(Math.max(1, catalog.page), totalPages);
+    const start = (catalog.page - 1) * PAGE_SIZE;
+    const pageItems = catalog.results.slice(start, start + PAGE_SIZE);
+
+    controls.querySelector('[data-catalog-count]').textContent =
+      `${catalog.results.length} verified match${catalog.results.length === 1 ? '' : 'es'} • ${exactResults().length} exact`;
+    controls.querySelector('[data-catalog-seen]').textContent = `${catalog.candidatesSeen} source candidates checked`;
+
+    if (!pageItems.length) {
+      root.innerHTML = '<div class="notice subtle">No verified animal video matches yet. Use “Load more matching videos” or try a simpler topic.</div>';
+    } else {
+      root.innerHTML = pageItems.map(item => {
+        const globalIndex = catalog.results.indexOf(item);
+        const badge = item.matchType === 'exact'
+          ? '<span class="clipfree-match-badge exact">✓ Exact match</span>'
+          : '<span class="clipfree-match-badge related">Related animal footage</span>';
+        return `
+          <article class="video-result">
+            ${item.thumbUrl ? `<img src="${esc(item.thumbUrl)}" alt="" loading="lazy" />` : ''}
+            <div class="result-body">
+              ${badge}
+              <h3>${esc(item.cleanTitle || cleanTitle(item.title))}</h3>
+              <p>${esc(item.creator || 'Wikimedia Commons')} • ${esc(item.license || '')}${item.size ? ` • ${(item.size / 1024 / 1024).toFixed(1)} MB` : ''}</p>
+              <div class="result-actions">
+                <button data-catalog-use="${globalIndex}">Use + FULL AUTO</button>
+                <a href="${esc(item.sourceUrl || '#')}" target="_blank" rel="noopener">Open source</a>
+              </div>
             </div>
-          </div>
-        </article>
-      `).join('');
-
-      root.querySelectorAll('[data-patch-use]').forEach(btn => btn.addEventListener('click', async () => {
-        const item = items[Number(btn.dataset.patchUse)];
-        if (!item) return;
-        btn.disabled = true;
-        try {
-          await connectFromUserClick();
-          const file = await downloadReliable(item, Number(btn.dataset.patchUse));
-          await yt.startFullAutoWithFile(file, item);
-        } catch (err) {
-          setAutoStatus('FULL AUTO stopped', err?.message || String(err), 0, 'bad');
-        } finally {
-          btn.disabled = false;
-        }
-      }));
+          </article>`;
+      }).join('');
     }
+
+    const pager = controls.querySelector('[data-catalog-pagination]');
+    const buttons = [];
+    buttons.push(`<button type="button" data-page="${catalog.page - 1}" ${catalog.page <= 1 ? 'disabled' : ''}>‹</button>`);
+    const first = Math.max(1, catalog.page - 2);
+    const last = Math.min(totalPages, first + 4);
+    for (let p = first; p <= last; p++) {
+      buttons.push(`<button type="button" data-page="${p}" class="${p === catalog.page ? 'active' : ''}">${p}</button>`);
+    }
+    buttons.push(`<button type="button" data-page="${catalog.page + 1}" ${catalog.page >= totalPages ? 'disabled' : ''}>›</button>`);
+    pager.innerHTML = buttons.join('');
+
+    pager.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => {
+      const page = Number(btn.dataset.page);
+      if (!Number.isFinite(page) || page < 1 || page > totalPages) return;
+      catalog.page = page;
+      renderCatalog();
+      document.getElementById('commonsResults')?.scrollIntoView({ behavior:'smooth', block:'start' });
+    }));
+
+    root.querySelectorAll('[data-catalog-use]').forEach(btn => btn.addEventListener('click', async () => {
+      const item = catalog.results[Number(btn.dataset.catalogUse)];
+      if (!item) return;
+      btn.disabled = true;
+      try {
+        await connectFromUserClick();
+        const file = await downloadReliable(item, Number(btn.dataset.catalogUse));
+        await yt.startFullAutoWithFile(file, item);
+      } catch (err) {
+        setAutoStatus('FULL AUTO stopped', err?.message || String(err), 0, 'bad');
+      } finally {
+        btn.disabled = false;
+      }
+    }));
+
+    const more = controls.querySelector('[data-catalog-more]');
+    if (catalog.exhausted.size >= catalog.variants.length && catalog.variants.length) {
+      more.disabled = true;
+      more.textContent = 'No more source pages for this search';
+    } else {
+      more.disabled = false;
+      more.textContent = 'Load more matching videos';
+    }
+  }
+
+  async function installPatch() {
+    yt = await waitForClipFree();
+    if (!yt) return;
+    if (yt.__clipfreeCatalogPatchInstalled) return;
+    yt.__clipfreeCatalogPatchInstalled = true;
+
+    yt.searchCommonsDownloadable = async (query, limit = 12) => {
+      const tempQuery = String(query || '').trim();
+      const variants = buildSearchVariants(tempQuery);
+      const gathered = [];
+      for (const variant of variants.slice(0, 6)) {
+        try {
+          const page = await fetchCommonsSearchPage(variant, 0);
+          gathered.push(...page.items);
+        } catch (err) {
+          console.warn('Verified animal search skipped one variant', variant, err);
+        }
+      }
+      return unique(gathered.map(item => classifyItem(item, tempQuery)).filter(Boolean))
+        .sort((a,b) => {
+          if (a.matchType !== b.matchType) return a.matchType === 'exact' ? -1 : 1;
+          return Number(b.relevanceScore || 0) - Number(a.relevanceScore || 0) || Number(a.size || 0) - Number(b.size || 0);
+        })
+        .slice(0, Math.max(1, Math.min(20, limit)));
+    };
 
     const autoFind = document.getElementById('autoFindCreateUpload');
     if (autoFind) {
@@ -355,53 +641,61 @@ applySettings();
         const finderStatus = document.getElementById('autoFinderStatus');
         const topic = (topicInput?.value || '').trim() || 'wildlife animals';
         const wanted = Math.max(1, Math.min(8, Number(batchSelect?.value) || 1));
+        const action = detectAction(topic);
 
         autoFind.disabled = true;
         try {
-          setAutoStatus('Connecting YouTube', 'Refreshing Google authorization before the search so Android does not block the popup later.', 2);
+          setAutoStatus('Connecting YouTube', 'Refreshing Google authorization before the catalog search…', 2);
           await connectFromUserClick();
 
-          setAutoStatus('Finding true matches', `Searching for real animal footage matching “${topic}”…`, 5);
-          setNotice(finderStatus, `Searching and filtering unrelated results for “${topic}”…`);
+          resetCatalog(topic);
+          setAutoStatus('Building video catalog', `Searching multiple Wikimedia video pages for “${topic}”…`, 5);
+          setNotice(finderStatus, `Building a verified catalog for “${topic}”. False matches such as airlines, MGM logos and military “African Lion” exercises are removed.`);
 
-          const items = await strictSearch(topic, 20);
-          renderResults(items);
+          await loadCatalogRound();
 
-          if (!items.length) throw new Error('No matching animal videos passed the relevance filter. Try a simpler animal topic.');
+          let extraRounds = 0;
+          while (action && exactResults().length < wanted && extraRounds < 2 && catalog.exhausted.size < catalog.variants.length) {
+            setAutoStatus('Searching deeper', `Looking through more source pages for exact “${topic}” footage…`, 6 + extraRounds * 2);
+            await loadCatalogRound();
+            extraRounds += 1;
+          }
 
-          setNotice(finderStatus, `Found ${items.length} matching animal videos. Unrelated military/training results were removed.`, 'good');
+          renderCatalog();
+
+          if (!catalog.results.length) throw new Error('No verified animal videos matched this topic yet. Try a simpler animal phrase or press Load more.');
+
+          const exact = exactResults();
+          const usable = action ? exact : catalog.results;
+
+          if (action && !exact.length) {
+            setNotice(finderStatus, `No exact “${topic}” action clips were verified yet. ${catalog.results.length} related animal videos are cataloged below, but ClipFree will not auto-upload them as if they showed the requested action.`, 'bad');
+            setAutoStatus('Catalog ready', 'No exact action match was auto-uploaded. Browse the related catalog or load more verified videos.', 100, 'subtle');
+            return;
+          }
+
+          setNotice(finderStatus, `Cataloged ${catalog.results.length} verified animal videos from ${catalog.candidatesSeen} source candidates.${action ? ` ${exact.length} are exact “${topic}” matches.` : ''} Results are split into pages below.`, 'good');
 
           let success = 0;
           let attempted = 0;
-          const errors = [];
-
-          for (const item of items) {
+          for (const item of usable) {
             if (success >= wanted) break;
             attempted += 1;
-            const number = success + 1;
-            setAutoStatus(`Batch ${number}/${wanted}`, `Downloading a verified animal match: “${String(item.title || '').replace(/\.[a-z0-9]{2,5}$/i, '')}”`, 8 + Math.round((success / wanted) * 84), 'good');
-
+            setAutoStatus(`Batch ${success + 1}/${wanted}`, `Using verified ${item.matchType === 'exact' ? 'exact ' : ''}match: “${item.cleanTitle || cleanTitle(item.title)}”`, 10 + Math.round((success / wanted) * 82), 'good');
             try {
               const file = await downloadReliable(item, attempted - 1);
               await yt.startFullAutoWithFile(file, item);
               success += 1;
             } catch (err) {
               console.warn('Skipping source that failed to load/process', item?.title, err);
-              errors.push(`${item?.title || 'source'}: ${err?.message || err}`);
-              setAutoStatus(`Skipping one source`, 'That source did not load reliably on this phone, so ClipFree is automatically trying the next matching video.', 8 + Math.round((success / wanted) * 84), 'subtle');
+              setAutoStatus('Skipping one source', 'That video failed on this phone, so ClipFree is automatically trying the next verified match.', 10 + Math.round((success / wanted) * 82), 'subtle');
               await sleep(250);
             }
           }
 
-          if (!success) {
-            throw new Error('Matching videos were found, but none loaded reliably on this phone. Try 1 Short first or use a simpler topic.');
-          }
+          if (!success) throw new Error('Verified matches were found, but none loaded reliably on this phone. Try 1 Short or choose a smaller result from the catalog.');
 
-          if (success < wanted) {
-            setAutoStatus('Batch partly complete', `${success}/${wanted} Shorts completed. ClipFree skipped sources that failed to load instead of stopping the whole batch.`, 100, 'good');
-          } else {
-            setAutoStatus('Batch complete', `${success} matching animal Short${success === 1 ? '' : 's'} completed.`, 100, 'good');
-          }
+          setAutoStatus(success >= wanted ? 'Batch complete' : 'Batch partly complete', `${success}/${wanted} Short${wanted === 1 ? '' : 's'} completed. The verified result catalog remains below for browsing.`, 100, 'good');
         } catch (err) {
           console.error(err);
           setNotice(finderStatus, err?.message || String(err), 'bad');
@@ -417,9 +711,9 @@ applySettings();
       animalButton.addEventListener('click', async (event) => {
         if (animalButton.dataset.authPrimed === '1') {
           animalButton.dataset.authPrimed = '0';
-          return; // let the original animal-generator click handler run
+          return;
         }
-        if (connectedNow()) return; // already connected; original handler can continue
+        if (connectedNow()) return;
 
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -438,10 +732,13 @@ applySettings();
         }
       }, true);
     }
+
+    ensureCatalogUi();
   }
 
-  installPatch().catch(err => console.warn('ClipFree site patch could not start', err));
+  installPatch().catch(err => console.warn('ClipFree verified catalog patch could not start', err));
 })();
+
 /* --------------------------------------------------------------------------
    ClipFree YouTube Discovery Optimizer
    A pre-publish scoring + metadata optimizer based on YouTube's documented

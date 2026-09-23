@@ -1,25 +1,15 @@
-# ClipFree YouTube Discovery Optimizer — upload only site.js
+# ClipFree verified animal catalog + pages fix
 
-This update keeps the previous animal-search/popup fixes and adds:
+Upload ONLY `site.js` to your existing `Video-clipper` GitHub repository and replace the old `site.js`.
 
-- Automatic search-intent title optimization
-- Natural keyword placement in the first lines of the description
-- Topic-specific tags and hashtags
-- Target-search phrase generation
-- A 0–100 **ClipFree Discovery Score**:
-  - Search readiness: 35 points
-  - Packaging/title readiness: 25 points
-  - Shorts Feed readiness: 25 points
-  - Metadata hygiene: 15 points
-- Automatic synchronization with the YouTube Upload form before FULL AUTO uploads
-- Wildlife-specific search terms for lions, moose, tigers, elephants, kittens, puppies, wolves and bears
-- No filename extensions in optimized titles
-- Safeguards against claiming an action such as "fight" unless it appears in the selected source's title
+Changes:
+- Searches multiple Wikimedia Commons result pages instead of only the old first 20 results.
+- Catalogs verified results into 12-per-page pages with Previous / Next / numbered page controls.
+- Adds a `Load more matching videos` button so you can keep expanding the catalog.
+- Rejects false matches such as Lion Air, MGM lion logos/film intros, military Exercise African Lion, airlines, crash sites and brands.
+- For `lion fights`, exact fight/action matches are prioritized; unrelated lion footage is not automatically uploaded as if it were a fight.
+- Prefers smaller files for Android reliability and skips a failed source instead of stopping the whole batch.
+- Keeps the existing YouTube Discovery Score / SEO optimizer.
 
-IMPORTANT: This is a pre-publish optimization score, not a guarantee of YouTube ranking. Real recommendations still depend on viewer response.
-
-## Install
-
-Upload ONLY `site.js` to the root of your existing `Video-clipper` GitHub repository and replace the old `site.js`.
-
-Do not delete or replace the other website files.
+Important:
+The catalog can check hundreds or thousands of source candidates over repeated Load More rounds, but it cannot guarantee thousands of verified videos for one exact topic if Wikimedia Commons does not contain that many.
