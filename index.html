@@ -75,6 +75,14 @@
                 <option value="5">5 Shorts</option><option value="6">6 Shorts</option><option value="7">7 Shorts</option><option value="8">8 Shorts</option>
               </select>
             </label>
+            <label><span>FULL AUTO visibility</span>
+              <select id="autoPrivacy">
+                <option value="private" selected>Private — use until YouTube API audit passes</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="public">Public — use after YouTube approves the API project</option>
+              </select>
+            </label>
+            <label class="checkline"><input id="autoUploadCertification" type="checkbox" /> I confirm I have the rights to upload this content and it complies with the <a href="https://www.youtube.com/howyoutubeworks/policies/community-guidelines/" target="_blank" rel="noopener">YouTube Community Guidelines</a>.</label>
             <button id="autoFindCreateUpload" class="primary">Find free videos → create → upload batch</button>
             <div id="autoFinderStatus" class="notice subtle">Uses Wikimedia Commons videos with straightforward reuse licences such as Public Domain, CC0 or CC BY. ClipFree keeps source/licence attribution with the upload.</div>
           </div>
@@ -99,6 +107,14 @@
           <div class="progress"><div id="autoProgressBar"></div></div>
           <div id="autoStatusDetail" class="notice subtle">Connect YouTube once, then choose a source. For new/unverified YouTube API projects, Google may force automatic uploads to Private until the project passes its audit.</div>
         </div>
+      </section>
+
+      <section class="growth-card wide-card">
+        <div class="panel-head">
+          <div><h3>Reliable upload queue</h3><p class="subcopy">Each Short is tracked separately. Retryable YouTube server errors are retried automatically up to 3 times. Failed items remain visible instead of disappearing.</p></div>
+          <button id="retryFailedUploads" class="secondary small-btn" type="button">Retry failed</button>
+        </div>
+        <div id="uploadQueue" class="card-body muted">No FULL AUTO jobs yet.</div>
       </section>
 
       <section class="growth-card wide-card">
@@ -414,6 +430,7 @@
             <label class="checkline"><input id="uploadCaptions" type="checkbox" checked /> Upload generated English SRT captions when available</label>
             <label class="checkline"><input id="uploadThumbnail" type="checkbox" checked /> Upload the automatically generated thumbnail when available</label>
             <label class="checkline"><input id="notifySubscribers" type="checkbox" /> Notify subscribers about this upload</label>
+            <label class="checkline"><input id="uploadCertification" type="checkbox" /> I confirm I have the rights to upload this content and it complies with the <a href="https://www.youtube.com/howyoutubeworks/policies/community-guidelines/" target="_blank" rel="noopener">YouTube Community Guidelines</a>.</label>
             <button id="uploadToYoutube" class="primary" disabled>Upload to YouTube</button>
             <div class="progress upload-progress"><div id="youtubeUploadProgress"></div></div>
             <div id="youtubeUploadStatus" class="notice subtle">Connect YouTube before uploading.</div>
@@ -441,6 +458,11 @@
             <button id="clearYoutubeSettings" class="secondary">Clear saved settings</button>
             <div id="settingsStatus" class="notice subtle">No credentials are bundled in this website.</div>
             <div id="diagnosticsStatus" class="notice subtle hidden"></div>
+            <div class="notice subtle">
+              <strong>YouTube API compliance:</strong> For API uploads to be eligible for Public visibility, YouTube requires newer unverified API projects to pass a compliance audit. Use the official
+              <a href="https://support.google.com/youtube/contact/yt_api_form" target="_blank" rel="noopener">YouTube Data API audit form</a>.
+              Keep <a href="privacy.html">Privacy Policy</a>, <a href="terms.html">Terms</a>, and the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms</a> available for review.
+            </div>
           </div>
         </section>
 
@@ -503,7 +525,7 @@
     </section>
   </main>
 
-  <footer>ClipFree AI • Automatic clipping + YouTube workflow tools • No watermark added by the app<br><a href="privacy.html">Privacy Policy</a> • <a href="terms.html">Terms of Service</a></footer>
+  <footer>ClipFree AI • Uses YouTube API Services • Automatic clipping + YouTube workflow tools • No watermark added by the app<br><a href="privacy.html">Privacy Policy</a> • <a href="terms.html">Terms of Service</a> • <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a> • <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></footer>
 
   <script type="module" src="app.js"></script>
   <script type="module" src="youtube.js"></script>

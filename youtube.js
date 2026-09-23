@@ -6,13 +6,14 @@ const els = {
   metricViews: $('metricViews'), metricWatch: $('metricWatchHours'), metricAvg: $('metricAvgDuration'), metricSubs: $('metricNetSubs'),
   snapshot: $('channelSnapshot'), plan: $('growthPlan'), audit: $('videoAuditTable'),
   channelDescription: $('channelDescriptionDraft'), generateDescription: $('generateChannelDescription'), applyDescription: $('applyChannelDescription'), autoOptimizeChannel: $('autoOptimizeChannel'),
-  autoTopic: $('autoTopic'), autoBatchCount: $('autoBatchCount'), autoFind: $('autoFindCreateUpload'), autoFinderStatus: $('autoFinderStatus'), commonsResults: $('commonsResults'),
+  autoTopic: $('autoTopic'), autoBatchCount: $('autoBatchCount'), autoPrivacy: $('autoPrivacy'), autoUploadCertification: $('autoUploadCertification'), autoFind: $('autoFindCreateUpload'), autoFinderStatus: $('autoFinderStatus'), commonsResults: $('commonsResults'),
   autoLocalFile: $('autoLocalFile'), autoLocalFileLabel: $('autoLocalFileLabel'), autoStartLocal: $('autoStartLocal'),
   autoStatusText: $('autoStatusText'), autoProgressBar: $('autoProgressBar'), autoStatusDetail: $('autoStatusDetail'),
+  uploadQueue: $('uploadQueue'), retryFailedUploads: $('retryFailedUploads'),
   ccQuery: $('ccSearchQuery'), ccButton: $('ccSearchButton'), ccStatus: $('ccFinderStatus'), ccResults: $('ccResults'),
   uploadFile: $('youtubeUploadFile'), uploadFileLabel: $('youtubeUploadFileLabel'), uploadReady: $('youtubeUploadReady'),
   uploadTitle: $('uploadTitle'), uploadDescription: $('uploadDescription'), uploadTags: $('uploadTags'), uploadPrivacy: $('uploadPrivacy'),
-  uploadCategory: $('uploadCategory'), uploadMadeForKids: $('uploadMadeForKids'), uploadPlaylist: $('uploadPlaylist'), uploadCaptions: $('uploadCaptions'), uploadThumbnail: $('uploadThumbnail'), notifySubscribers: $('notifySubscribers'),
+  uploadCategory: $('uploadCategory'), uploadMadeForKids: $('uploadMadeForKids'), uploadPlaylist: $('uploadPlaylist'), uploadCaptions: $('uploadCaptions'), uploadThumbnail: $('uploadThumbnail'), notifySubscribers: $('notifySubscribers'), uploadCertification: $('uploadCertification'),
   uploadButton: $('uploadToYoutube'), uploadStatus: $('youtubeUploadStatus'), uploadProgress: $('youtubeUploadProgress'),
   clientId: $('googleClientId'), apiKey: $('youtubeApiKey'), saveSettings: $('saveYoutubeSettings'), clearSettings: $('clearYoutubeSettings'), runDiagnostics: $('runDiagnostics'), settingsStatus: $('settingsStatus'), diagnosticsStatus: $('diagnosticsStatus'),
 };
@@ -25,7 +26,7 @@ const SCOPES = [
 ].join(' ');
 
 const state = {
-  settings: { clientId: '', apiKey: '' },
+  settings: { clientId: '', apiKey: '', autoPrivacy: 'private' },
   accessToken: '',
   expiresAt: 0,
   channel: null,
@@ -40,6 +41,9 @@ const state = {
   autoJobResolve: null,
   autoJobReject: null,
   batchRunning: false,
+  currentQueueId: '',
+  uploadQueue: [],
+  queueSeq: 0,
 };
 
 function esc(value = '') {
@@ -55,6 +59,84 @@ function setAutoStatus(text, progress = null, detail = null, type = 'subtle') {
   if (els.autoStatusText) els.autoStatusText.textContent = text;
   if (progress !== null && els.autoProgressBar) els.autoProgressBar.style.width = `${Math.max(0, Math.min(100, Number(progress) || 0))}%`;
   if (detail && els.autoStatusDetail) setNotice(els.autoStatusDetail, detail, type);
+}
+
+function autoPrivacyValue() {
+  const value = els.autoPrivacy?.value || state.settings.autoPrivacy || 'private';
+  return ['private','unlisted','public'].includes(value) ? value : 'private';
+}
+
+function queueLabel(job) {
+  return (job?.source?.cleanTitle || job?.source?.title || job?.file?.name || 'Short')
+    .replace(/\.(webm|mp4|mov|ogg|ogv)$/i, '')
+    .slice(0, 90);
+}
+
+function renderUploadQueue() {
+  if (!els.uploadQueue) return;
+  if (!state.uploadQueue.length) {
+    els.uploadQueue.className = 'card-body muted';
+    els.uploadQueue.textContent = 'No FULL AUTO jobs yet.';
+    return;
+  }
+  const icons = { queued:'⏳', processing:'⚙️', uploading:'⬆️', retrying:'🔁', uploaded:'✅', failed:'❌' };
+  els.uploadQueue.className = 'card-body';
+  els.uploadQueue.innerHTML = state.uploadQueue.map(job => `
+    <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #2a2a35">
+      <span style="font-size:1.2rem">${icons[job.status] || '•'}</span>
+      <div><strong>${esc(queueLabel(job))}</strong><br><small>${esc(job.message || job.status)}${job.attempts > 1 ? ` • attempt ${job.attempts}/3` : ''}</small></div>
+      <small>${job.videoId ? 'YouTube ✓' : ''}</small>
+    </div>`).join('');
+}
+
+function addQueueJob(file, source) {
+  const id = `q${Date.now()}_${++state.queueSeq}`;
+  const job = { id, file, source, status:'queued', message:'Waiting', attempts:0, videoId:'', createdAt:Date.now() };
+  state.uploadQueue.push(job);
+  renderUploadQueue();
+  return id;
+}
+
+function updateQueueJob(id, patch = {}) {
+  const job = state.uploadQueue.find(x => x.id === id);
+  if (!job) return;
+  Object.assign(job, patch);
+  renderUploadQueue();
+}
+
+function currentQueueJob() {
+  return state.uploadQueue.find(x => x.id === state.currentQueueId) || null;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function retryableUploadError(err) {
+  const status = Number(err?.status || 0);
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+async function uploadWithSafeRetries(options = {}) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const job = currentQueueJob();
+    if (job) updateQueueJob(job.id, {
+      attempts: attempt,
+      status: attempt === 1 ? 'uploading' : 'retrying',
+      message: attempt === 1 ? 'Uploading to YouTube' : `YouTube server retry ${attempt}/3`
+    });
+    try {
+      return await uploadToYouTube({ ...options, rethrow: true });
+    } catch (err) {
+      lastError = err;
+      if (!retryableUploadError(err) || attempt >= 3) throw err;
+      const wait = 1200 * (2 ** (attempt - 1));
+      setAutoStatus('Retrying YouTube upload', 82, `YouTube returned a temporary ${err.status || 'server'} error. Retrying in ${Math.round(wait/1000)}s…`, 'subtle');
+      await sleep(wait);
+    }
+  }
+  throw lastError || new Error('Upload failed.');
 }
 
 function stripHtml(value = '') {
@@ -94,10 +176,13 @@ function loadSettings() {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     state.settings.clientId = parsed.clientId || '';
     state.settings.apiKey = parsed.apiKey || '';
+    state.settings.autoPrivacy = ['private','unlisted','public'].includes(parsed.autoPrivacy) ? parsed.autoPrivacy : 'private';
   } catch {}
   els.clientId.value = state.settings.clientId;
   els.apiKey.value = state.settings.apiKey;
+  if (els.autoPrivacy) els.autoPrivacy.value = state.settings.autoPrivacy || 'private';
   updateSettingsStatus();
+  renderUploadQueue();
 }
 
 function updateSettingsStatus() {
@@ -114,10 +199,15 @@ els.saveSettings.addEventListener('click', () => {
   if (clientId && !clientId.endsWith('.apps.googleusercontent.com')) {
     return setNotice(els.settingsStatus, 'That OAuth Client ID does not look valid. It should end in .apps.googleusercontent.com.', 'bad');
   }
-  state.settings = { clientId, apiKey };
+  state.settings = { clientId, apiKey, autoPrivacy: autoPrivacyValue() };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
   updateSettingsStatus();
   refreshFinderAvailability();
+});
+
+if (els.autoPrivacy) els.autoPrivacy.addEventListener('change', () => {
+  state.settings.autoPrivacy = autoPrivacyValue();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
 });
 
 els.runDiagnostics.addEventListener('click', async () => {
@@ -141,9 +231,10 @@ els.runDiagnostics.addEventListener('click', async () => {
 
 els.clearSettings.addEventListener('click', () => {
   localStorage.removeItem(STORAGE_KEY);
-  state.settings = { clientId: '', apiKey: '' };
+  state.settings = { clientId: '', apiKey: '', autoPrivacy: 'private' };
   els.clientId.value = '';
   els.apiKey.value = '';
+  if (els.autoPrivacy) els.autoPrivacy.value = 'private';
   disconnectYoutube();
   updateSettingsStatus();
   refreshFinderAvailability();
@@ -831,7 +922,12 @@ async function startFullAutoWithFile(file, source = null) {
   if (!file) throw new Error('No video file was selected.');
   if (!window.ClipFreeAutomation?.loadVideoFile) throw new Error('ClipFree video engine has not loaded yet. Refresh the page and try again.');
   if (state.autoUploadQueued) throw new Error('Another FULL AUTO upload is still running. Wait for it to finish.');
+  if (!els.autoUploadCertification?.checked) throw new Error('Tick the FULL AUTO content-rights / Community Guidelines confirmation before starting a batch.');
   await ensureFullAutoConnection();
+
+  const queueId = addQueueJob(file, source);
+  state.currentQueueId = queueId;
+  updateQueueJob(queueId, { status:'processing', message:'Creating Short, captions, thumbnail and SEO' });
 
   const completion = new Promise((resolve, reject) => {
     state.autoJobResolve = resolve;
@@ -839,7 +935,7 @@ async function startFullAutoWithFile(file, source = null) {
   });
   state.autoUploadQueued = true;
   state.autoSource = source;
-  els.uploadPrivacy.value = 'private';
+  els.uploadPrivacy.value = autoPrivacyValue();
   els.uploadMadeForKids.value = 'false';
   els.uploadCaptions.checked = true;
   if (els.uploadThumbnail) els.uploadThumbnail.checked = true;
@@ -851,6 +947,7 @@ async function startFullAutoWithFile(file, source = null) {
     document.querySelector('#studio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     state.autoUploadQueued = false;
+    updateQueueJob(state.currentQueueId, { status:'failed', message: err?.message || String(err) });
     const reject = state.autoJobReject;
     state.autoJobResolve = null;
     state.autoJobReject = null;
@@ -948,12 +1045,14 @@ window.addEventListener('clipfree-export-ready', async (event) => {
     const playlistId = await ensureAutoPlaylist().catch(err => { console.warn('Playlist setup failed', err); return ''; });
     renderPlaylistOptions();
     if (playlistId) els.uploadPlaylist.value = playlistId;
-    els.uploadPrivacy.value = 'private';
+    els.uploadPrivacy.value = autoPrivacyValue();
     els.uploadCaptions.checked = true;
     if (els.uploadThumbnail) els.uploadThumbnail.checked = true;
     setAutoStatus('Uploading to YouTube', 80, 'Uploading the finished Short to your channel. New/unverified API projects may force it to Private.', 'good');
-    const result = await uploadToYouTube({ rethrow: true });
+    updateQueueJob(state.currentQueueId, { status:'uploading', message:`Uploading as ${autoPrivacyValue()}` });
+    const result = await uploadWithSafeRetries({ rethrow: true });
     state.autoUploadQueued = false;
+    updateQueueJob(state.currentQueueId, { status:'uploaded', message:`Upload complete (${autoPrivacyValue()})`, videoId: result?.id || '' });
     const link = result?.id ? `https://www.youtube.com/watch?v=${result.id}` : '';
     setAutoStatus('FULL AUTO complete', 100, `Finished: vertical Short, captions, thumbnail, SEO, attribution, upload${playlistId ? ' and playlist' : ''}.${link ? ' The video is now on your YouTube channel.' : ''}`, 'good');
     const resolve = state.autoJobResolve;
@@ -963,6 +1062,7 @@ window.addEventListener('clipfree-export-ready', async (event) => {
   } catch (err) {
     console.error(err);
     state.autoUploadQueued = false;
+    updateQueueJob(state.currentQueueId, { status:'failed', message: err?.message || String(err) });
     setAutoStatus('Upload needs attention', 75, err.message || String(err), 'bad');
     const reject = state.autoJobReject;
     state.autoJobResolve = null;
@@ -1023,9 +1123,17 @@ async function xhrUpload(url, body, token, onProgress) {
     xhr.onload = () => {
       let data = {}; try { data = JSON.parse(xhr.responseText || '{}'); } catch { data = { raw: xhr.responseText }; }
       if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-      else reject(new Error(data?.error?.message || data?.raw || `${xhr.status} ${xhr.statusText}`));
+      else {
+        const err = new Error(data?.error?.message || data?.raw || `${xhr.status} ${xhr.statusText}`);
+        err.status = xhr.status;
+        reject(err);
+      }
     };
-    xhr.onerror = () => reject(new Error('Network error while uploading to YouTube.'));
+    xhr.onerror = () => {
+      const err = new Error('Network error while uploading to YouTube. The job is kept in the queue so you can retry it without losing track of the failure.');
+      err.status = 0;
+      reject(err);
+    };
     xhr.send(body);
   });
 }
@@ -1033,6 +1141,13 @@ async function xhrUpload(url, body, token, onProgress) {
 async function uploadToYouTube(options = {}) {
   const media = state.uploadFile || state.generatedExport?.blob || window.ClipFreeExport?.blob;
   if (!media) return alert('Choose or generate a video first.');
+  const isFullAuto = Boolean(state.autoUploadQueued);
+  const certified = isFullAuto ? Boolean(els.autoUploadCertification?.checked) : Boolean(els.uploadCertification?.checked);
+  if (!certified) {
+    const err = new Error('Confirm that you have the rights to upload the content and that it complies with YouTube Community Guidelines.');
+    if (options?.rethrow) throw err;
+    return alert(err.message);
+  }
   const title = els.uploadTitle.value.trim();
   if (!title) return alert('Enter a YouTube title first.');
   const description = els.uploadDescription.value.trim();
@@ -1130,6 +1245,40 @@ async function addVideoToPlaylist(videoId, playlistId) {
     body: JSON.stringify({ snippet: { playlistId, resourceId: { kind: 'youtube#video', videoId } } }),
   });
 }
+
+
+if (els.retryFailedUploads) els.retryFailedUploads.addEventListener('click', async () => {
+  if (state.batchRunning || state.autoUploadQueued) return;
+  const failed = state.uploadQueue.filter(job => job.status === 'failed' && job.file);
+  if (!failed.length) {
+    setAutoStatus('No failed jobs', 100, 'There are no failed FULL AUTO jobs to retry.', 'good');
+    return;
+  }
+  if (!els.autoUploadCertification?.checked) {
+    setAutoStatus('Confirmation needed', 0, 'Tick the FULL AUTO content-rights / Community Guidelines confirmation before retrying.', 'bad');
+    return;
+  }
+  state.batchRunning = true;
+  els.retryFailedUploads.disabled = true;
+  try {
+    for (const oldJob of failed) {
+      oldJob.status = 'retrying';
+      oldJob.message = 'Queued for a fresh retry';
+      renderUploadQueue();
+      try {
+        await startFullAutoWithFile(oldJob.file, oldJob.source || null);
+        oldJob.message = 'Retried in a new queue job';
+      } catch (err) {
+        oldJob.status = 'failed';
+        oldJob.message = `Retry failed: ${err?.message || err}`;
+        renderUploadQueue();
+      }
+    }
+  } finally {
+    state.batchRunning = false;
+    els.retryFailedUploads.disabled = false;
+  }
+});
 
 window.ClipFreeYouTube = {
   connectYoutube,

@@ -1,13 +1,39 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="index,follow"><title>Privacy Policy — ClipFree AI</title><link rel="stylesheet" href="styles.css"></head>
 <body><header class="topbar"><a class="brand" href="index.html">ClipFree <span>AI</span></a><nav><a class="pill" href="index.html">Back to app</a></nav></header>
-<main><section class="privacy-section"><h1>Privacy Policy</h1><p><strong>Last updated: 23 September 2026.</strong></p>
-<p>ClipFree AI is designed as a static browser application. Video clipping, transcription and most media processing are performed on your device in your browser. ClipFree AI does not operate its own account database or upload server in this build.</p>
-<h2>Google and YouTube data</h2><p>When you choose to connect YouTube, Google handles sign-in and provides a temporary OAuth access token. The token is used to request YouTube channel data, analytics and actions that you explicitly initiate or enable in the app. The access token is kept in page memory and is not written to the GitHub repository.</p>
-<p>The Google OAuth Client ID and optional YouTube API key that you enter may be stored in your browser's localStorage so the setup persists on that device. You can clear them from the Setup section.</p>
-<h2>Videos and media</h2><p>Local video files are processed in your browser. If you use reusable-media discovery, your browser may request files and metadata from Wikimedia Commons. If you upload to YouTube, the finished media and metadata are sent directly from your browser to Google's YouTube APIs.</p>
+<main><section class="privacy-section"><h1>Privacy Policy</h1><p><strong>Last updated: 24 September 2026.</strong></p>
+
+<p>ClipFree AI is a browser-based media workflow tool that uses YouTube API Services when you choose to connect a YouTube channel. Video clipping, transcription and most media processing are performed on your device in your browser. This GitHub Pages build does not operate its own account database or upload server.</p>
+
+<h2>YouTube API Services and Google data</h2>
+<p>ClipFree AI uses YouTube API Services. When you connect YouTube, Google handles sign-in and provides a temporary OAuth access token. ClipFree AI does not ask for or store your Google password. The token is kept in page memory for the active browser session and is used only for YouTube API requests needed for features you initiate or enable.</p>
+<p>The app may access your connected channel information, uploaded-video metadata, playlists and YouTube Analytics reports, and may perform write actions you explicitly initiate or enable, such as uploading videos, captions and thumbnails or adding a video to a playlist.</p>
+<p>The Google OAuth Client ID and optional public YouTube API key you enter may be stored in this browser's localStorage so setup persists on this device. ClipFree AI does not store a Google client secret in the website.</p>
+
+<h2>How YouTube data is used</h2>
+<p>YouTube data is used to show your connected channel, recent videos, analytics and playlists; generate channel/video optimization suggestions; upload media and related metadata that you instruct ClipFree AI to publish; and add uploaded videos to playlists when you select or enable that option. ClipFree AI does not sell YouTube user data or use it for advertising, surveillance or unrelated purposes.</p>
+
+<h2>Videos and media</h2>
+<p>Local video files are processed in your browser. If you use reusable-media discovery, your browser may request files and metadata from Wikimedia Commons. If you upload to YouTube, the finished media and metadata are sent directly from your browser to Google's YouTube APIs.</p>
+
+<h2>Storage, revocation and deletion</h2>
+<p>This static build does not persist channel analytics or OAuth access tokens on a ClipFree server. Authorized YouTube data displayed in the interface is refreshed from YouTube and is cleared when the page/session state is cleared. Browser-saved setup values can be removed with the Clear saved settings control or by clearing this site's browser data.</p>
+<p>You can disconnect YouTube at any time using the Disconnect control. ClipFree AI then revokes the current token through Google's authorization library when available and clears the YouTube data held in page state. You can also revoke ClipFree AI from your <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noopener">Google account permissions</a>.</p>
+<p>Deleting locally stored ClipFree settings does not delete videos or other data stored by YouTube. To delete data/content stored by YouTube, use YouTube or an authorized API client that supports that action.</p>
+
+<h2>Your choices and consent</h2>
+<p>ClipFree AI identifies the connected YouTube channel and shows the visibility setting used for uploads. Upload/write actions are performed only after you initiate or enable the workflow and confirm that you have the rights to upload the content and that it complies with YouTube's Community Guidelines.</p>
+
+<h2>Third-party services</h2>
+<p>The app can load libraries or data from Google, YouTube, Wikimedia Commons, jsDelivr, unpkg, Hugging Face and related content-delivery services. Those services may receive normal web request information such as IP address and browser headers under their own privacy policies.</p>
+
+<h2>Google and YouTube policies</h2>
+<p>Google's handling of information is described in the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>. Use of YouTube is subject to the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a>.</p>
+
 <h2>Donation links</h2><p>The optional charity button only opens the external charity or fundraiser URL configured by the site owner on that browser. ClipFree AI does not process, collect or hold donation payments.</p>
-<h2>Third-party services</h2><p>The app can load libraries or data from Google, YouTube, Wikimedia Commons, jsDelivr, unpkg, Hugging Face and related content-delivery services. Those services may receive normal web request information such as IP address and browser headers under their own privacy policies.</p>
-<h2>Control</h2><p>You can disconnect YouTube, clear saved settings, close the page, or clear browser site data at any time.</p>
+
+<h2>Contact and data requests</h2>
+<p>This current build is a static self-hosted tool, so you control the browser data on your device. Use Disconnect and Clear saved settings to revoke access and remove local setup data. If ClipFree AI later adds a hosted account or backend, this policy will be updated with the applicable contact information and hosted-data deletion process before that service is offered.</p>
+
 <p><a class="primary" href="index.html">Return to ClipFree AI</a></p></section></main>
-<footer>ClipFree AI • <a href="terms.html">Terms of Service</a></footer></body></html>
+<footer>ClipFree AI • <a href="terms.html">Terms of Service</a> • <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms</a> • <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></footer></body></html>
