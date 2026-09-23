@@ -523,7 +523,8 @@ function renderGrowthPlan() {
   const ranked = [...videos].map(v => ({ v, a: state.analyticsByVideo.get(v.id) }))
     .filter(x => x.a).sort((a,b) => Number(b.a.estimatedMinutesWatched || 0) - Number(a.a.estimatedMinutesWatched || 0));
   const top = ranked.slice(0, 3);
-  const lowMeta = videos.filter(v => metadataHealth(v).score < 70).length;
+  // Audit-safe mode: do not calculate a custom metadata-health metric from YouTube API data.
+  const lowMeta = 0;
   const shortCount = videos.filter(v => parseIsoDuration(v.contentDetails?.duration) <= 60).length;
   const items = [];
   if (top.length) {
@@ -533,32 +534,15 @@ function renderGrowthPlan() {
     });
   }
   if (topics.length) items.push({ title: 'Keep channel topics clear', body: `Frequent themes in your recent uploads are ${topics.join(', ')}. Use clear titles and thumbnails that immediately tell viewers which of these topics the video delivers.` });
-  if (lowMeta) items.push({ title: 'Fix incomplete metadata', body: `${lowMeta} of the ${videos.length} recent videos loaded have missing or very thin titles, descriptions or tags. Use “Fill missing metadata” in the table without replacing already-good text.` });
+  // Custom metadata scoring/recommendations are disabled until YouTube approves the derived-metrics use case.
   if (shortCount) items.push({ title: 'Connect Shorts to longer viewing', body: `${shortCount} loaded videos are 60 seconds or shorter. When relevant, use descriptions, playlists and follow-up videos to give interested viewers a next video to watch.` });
   items.push({ title: 'Optimize for viewers, not fake engagement', body: 'The dashboard tracks views, watch time and subscribers, but it never buys, bots or fabricates engagement. Sustainable growth depends on content people choose to watch and keep watching.' });
   els.plan.className = 'card-body';
   els.plan.innerHTML = `<div class="plan-list">${items.map(x => `<div class="plan-item"><strong>${esc(x.title)}</strong><p>${esc(x.body)}</p></div>`).join('')}</div>`;
 }
 
-function metadataHealth(v) {
-  const title = (v.snippet?.title || '').trim();
-  const desc = (v.snippet?.description || '').trim();
-  const tags = v.snippet?.tags || [];
-  let score = 0;
-  if (title.length >= 20 && title.length <= 75) score += 35; else if (title.length >= 10) score += 20;
-  if (desc.length >= 150) score += 35; else if (desc.length >= 60) score += 22; else if (desc.length) score += 10;
-  if (tags.length >= 3) score += 15; else if (tags.length) score += 8;
-  const upperWords = title.split(/\s+/).filter(w => w.length > 2 && w === w.toUpperCase()).length;
-  if (upperWords <= 2) score += 10;
-  if (v.snippet?.thumbnails?.high || v.snippet?.thumbnails?.maxres) score += 5;
-  const tips = [];
-  if (title.length < 20) tips.push('Title is very short');
-  if (title.length > 75) tips.push('Title may be harder to scan');
-  if (desc.length < 60) tips.push('Description is thin');
-  if (tags.length < 3) tips.push('Few tags');
-  if (!tips.length) tips.push('Metadata is reasonably complete');
-  return { score: Math.min(100, score), tips };
-}
+// Audit-safe mode: custom metadata-health scoring based on YouTube API data is disabled
+// until YouTube approves the derived-metrics use case.
 
 function renderVideoAudit() {
   if (!state.videos.length) {
@@ -567,21 +551,18 @@ function renderVideoAudit() {
   }
   els.audit.className = 'table-wrap';
   const rows = state.videos.map(v => {
-    const h = metadataHealth(v);
     const a = state.analyticsByVideo.get(v.id);
     const seconds = parseIsoDuration(v.contentDetails?.duration);
-    const labelClass = h.score >= 80 ? 'good' : h.score >= 60 ? '' : 'warn';
     return `<tr>
-      <td><strong>${esc(v.snippet.title)}</strong><div class="kpi-note">${esc(h.tips.join(' • '))}</div></td>
-      <td>${durationFmt(seconds)}${seconds <= 60 ? '<div class="kpi-note">Short-form length</div>' : ''}</td>
+      <td><strong>${esc(v.snippet.title)}</strong><div class="kpi-note">Raw YouTube metadata shown. Custom metadata scoring is disabled while derived-metrics approval is pending.</div></td>
+      <td>${durationFmt(seconds)}${seconds <= 60 ? '<div class="kpi-note">60 seconds or shorter</div>' : ''}</td>
       <td>${nfmt(v.statistics?.viewCount || 0)}</td>
       <td>${a ? `${nfmt((Number(a.estimatedMinutesWatched || 0)/60).toFixed(1))} h` : '<span class="muted-cell">—</span>'}</td>
-      <td><span class="health-pill ${labelClass}">${h.score}% complete</span></td>
-      <td><div class="mini-actions"><button data-action="fill" data-video="${esc(v.id)}">Fill missing metadata</button><a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">Open</a></div></td>
+      <td><span class="health-pill">Review manually</span></td>
+      <td><div class="mini-actions"><a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">Open</a></div></td>
     </tr>`;
   }).join('');
   els.audit.innerHTML = `<table class="audit-table"><thead><tr><th>Video</th><th>Length</th><th>Total views</th><th>28-day watch</th><th>Metadata</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
-  els.audit.querySelectorAll('[data-action="fill"]').forEach(btn => btn.addEventListener('click', () => fillMissingMetadata(btn.dataset.video, btn)));
 }
 
 function buildFilledSnippet(v) {
@@ -624,26 +605,8 @@ async function fillMissingMetadata(videoId, button) {
   }
 }
 
-els.autoFixMetadata.addEventListener('click', async () => {
-  const targets = state.videos.filter(v => metadataHealth(v).score < 60);
-  if (!targets.length) return alert('No recent videos need the conservative metadata fill.');
-  if (!confirm(`Auto-fill missing metadata on ${targets.length} recent video${targets.length === 1 ? '' : 's'}? Existing titles are preserved.`)) return;
-  const old = els.autoFixMetadata.textContent;
-  els.autoFixMetadata.disabled = true;
-  let done = 0;
-  const failures = [];
-  try {
-    for (const v of targets) {
-      els.autoFixMetadata.textContent = `Updating ${done + 1}/${targets.length}`;
-      try { await updateVideoSnippet(v); done++; } catch (err) { failures.push(`${v.snippet.title}: ${err.message || err}`); }
-    }
-    renderVideoAudit();
-    renderGrowthPlan();
-    alert(`Finished. Updated ${done} video${done === 1 ? '' : 's'}${failures.length ? `; ${failures.length} could not be updated.` : '.'}`);
-  } finally {
-    els.autoFixMetadata.textContent = old;
-    els.autoFixMetadata.disabled = false;
-  }
+els.autoFixMetadata.addEventListener('click', () => {
+  alert('Audit-safe mode: automatic scoring and bulk metadata changes for existing YouTube videos are temporarily disabled until YouTube approves the derived-metrics use case. Pre-upload ClipFree SEO and Discovery Score still work.');
 });
 
 async function applyChannelDescriptionValue(description) {
@@ -670,7 +633,7 @@ async function autoOptimizeConnectedChannel() {
   let updated = 0;
   const failures = [];
   try {
-    const targets = state.videos.filter(v => metadataHealth(v).score < 60);
+    const targets = []; // Audit-safe mode: do not select existing videos using an API-derived custom score.
     for (let i = 0; i < targets.length; i++) {
       if (button) button.textContent = `Metadata ${i + 1}/${targets.length}`;
       try { await updateVideoSnippet(targets[i]); updated++; } catch (err) { failures.push(err.message || String(err)); }
