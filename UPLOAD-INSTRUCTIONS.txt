@@ -1,0 +1,32 @@
+CLIPFREE PREMIUM AUTO V3 — ORIGINALITY GUARD
+
+Upload/replace these 4 files in the ROOT of your GitHub Video-clipper repository:
+
+1. index.html                  REPLACE
+2. premium-auto.js             REPLACE
+3. category-pages.js           REPLACE
+4. originality-guard.js        ADD NEW
+
+DO NOT DELETE your existing app.js, youtube.js, site.js, animal-generator.js,
+ffmpeg-worker.js, styles.css, config files, privacy.html or terms.html.
+
+WHAT ORIGINALITY GUARD AUTOMATES
+- Detects externally sourced / Commons footage
+- Builds a different educational storyline for every generated Short
+- Generates 5 distinct educational commentary/caption cards
+- Burns those commentary cards visibly into the final 9:16 video
+- Keeps the existing SRT captions
+- Preserves source attribution
+- Checks repeated source combinations during the session
+- Uses multi-source count from Animal AI montages
+- If only one external source is used, forces the upload to Private for manual review
+- If attribution cannot be confirmed, forces Private
+- If visible-commentary rendering fails, forces Private
+- Adds an Originality Guard status panel to the website
+- Works alongside Premium Auto unique titles, brighter thumbnails and category pages
+
+IMPORTANT
+This is designed to make the workflow meaningfully more transformative and safer
+for YouTube monetization review, but NO software can guarantee YouTube Partner
+Program approval. YouTube reviews the channel as a whole. Rights/copyright rules
+also still apply separately.

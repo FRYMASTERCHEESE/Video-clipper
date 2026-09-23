@@ -30,6 +30,7 @@
   <header class="topbar">
     <a class="brand" href="#">ClipFree <span>AI</span></a>
     <nav>
+      <a href="#category-wizard">Categories</a>
       <a href="#autopilot">Full Auto</a>
       <a href="#animal-generator">Animal AI</a>
       <a href="#studio">Clip Studio</a>
@@ -53,6 +54,96 @@
       <div class="trust-row">
         <span>✓ Runs in your browser</span><span>✓ No watermark added</span><span>✓ No paid AI API required</span><span>✓ Official YouTube APIs</span><span>✓ You stay in control of publishing</span>
       </div>
+    </section>
+
+
+    <section id="category-wizard" class="growth-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">CATEGORY PAGES • STEP BY STEP</div>
+          <h2>Choose a category, then tap Next.</h2>
+          <p>This quick setup fills the existing FULL AUTO and Animal AI controls for you. Use Back and Next like separate pages, then start the workflow from the final page.</p>
+        </div>
+      </div>
+
+      <section class="growth-card category-wizard-card">
+        <div class="card-body">
+          <div class="category-wizard-progress" aria-label="Setup progress">
+            <span data-wizard-dot="0" class="active">1</span>
+            <span data-wizard-dot="1">2</span>
+            <span data-wizard-dot="2">3</span>
+            <span data-wizard-dot="3">4</span>
+          </div>
+
+          <div class="category-wizard-page active" data-wizard-page="0">
+            <h3>Page 1 — Choose your category</h3>
+            <p class="subcopy">Pick the type of Shorts you want ClipFree to create automatically.</p>
+            <div class="category-choice-grid">
+              <button type="button" class="category-choice" data-category="lions" data-topic="lion wildlife">🦁 <strong>Lions</strong><span>Big-cat wildlife</span></button>
+              <button type="button" class="category-choice" data-category="wildlife" data-topic="wild animals wildlife nature">🌍 <strong>Wildlife</strong><span>Mixed wild animals</span></button>
+              <button type="button" class="category-choice" data-category="kittens" data-topic="cute kitten cat playing">🐱 <strong>Kittens</strong><span>Cute cat Shorts</span></button>
+              <button type="button" class="category-choice" data-category="puppies" data-topic="cute puppy dog playing">🐶 <strong>Puppies</strong><span>Cute dog Shorts</span></button>
+              <button type="button" class="category-choice" data-category="tigers" data-topic="tiger wildlife">🐅 <strong>Tigers</strong><span>Wild big cats</span></button>
+              <button type="button" class="category-choice" data-category="elephants" data-topic="elephant wildlife">🐘 <strong>Elephants</strong><span>Safari wildlife</span></button>
+              <button type="button" class="category-choice" data-category="wolves" data-topic="wolf wildlife">🐺 <strong>Wolves</strong><span>Predator wildlife</span></button>
+              <button type="button" class="category-choice" data-category="bears" data-topic="bear wildlife">🐻 <strong>Bears</strong><span>Wildlife moments</span></button>
+            </div>
+          </div>
+
+          <div class="category-wizard-page" data-wizard-page="1">
+            <h3>Page 2 — Choose the style</h3>
+            <p class="subcopy">This controls the story tone and title style. FULL AUTO still checks the actual source before making action claims.</p>
+            <div class="category-choice-grid style-grid">
+              <button type="button" class="category-choice" data-style="documentary">🎬 <strong>Documentary</strong><span>Clear facts and wildlife context</span></button>
+              <button type="button" class="category-choice" data-style="dramatic">⚡ <strong>Dramatic</strong><span>Stronger hooks and action</span></button>
+              <button type="button" class="category-choice" data-style="cute">❤️ <strong>Cute</strong><span>Warm, friendly packaging</span></button>
+              <button type="button" class="category-choice" data-style="calm">🌿 <strong>Calm</strong><span>Relaxed nature tone</span></button>
+            </div>
+          </div>
+
+          <div class="category-wizard-page" data-wizard-page="2">
+            <h3>Page 3 — Batch and publishing</h3>
+            <div class="form-grid category-wizard-form">
+              <label><span>How many Shorts?</span>
+                <select id="wizardBatchCount">
+                  <option value="1">1 Short</option><option value="2">2 Shorts</option><option value="3" selected>3 Shorts</option>
+                  <option value="4">4 Shorts</option><option value="5">5 Shorts</option><option value="6">6 Shorts</option>
+                  <option value="7">7 Shorts</option><option value="8">8 Shorts</option>
+                </select>
+              </label>
+              <label><span>Visibility</span>
+                <select id="wizardPrivacy">
+                  <option value="private" selected>Private — safest until API audit passes</option>
+                  <option value="unlisted">Unlisted</option>
+                  <option value="public">Public — use after YouTube approval</option>
+                </select>
+              </label>
+              <label><span>Audience strategy</span>
+                <select id="wizardAudience">
+                  <option value="premium-en" selected>International English — US, Canada, UK, Australia, NZ</option>
+                </select>
+              </label>
+            </div>
+            <div class="notice subtle">The app can optimize packaging for these English-speaking markets, but YouTube decides which viewers receive each Short.</div>
+          </div>
+
+          <div class="category-wizard-page" data-wizard-page="3">
+            <h3>Page 4 — Ready</h3>
+            <div id="wizardSummary" class="notice good">Choose a category and style to finish setup.</div>
+            <div class="wizard-final-actions">
+              <button id="wizardStartAnimal" type="button" class="primary">Open Animal AI setup</button>
+              <button id="wizardStartAuto" type="button" class="secondary">Open FULL AUTO setup</button>
+            </div>
+            <p class="subcopy">Your category, topic, style, batch size and visibility are copied into the existing ClipFree controls automatically.</p>
+          </div>
+
+          <div class="category-wizard-nav">
+            <button id="wizardBack" type="button" class="secondary" disabled>← Back</button>
+            <span id="wizardPageLabel">Page 1 of 4</span>
+            <button id="wizardNext" type="button" class="primary">Next →</button>
+          </div>
+        </div>
+      </section>
     </section>
 
     <section id="autopilot" class="growth-shell autopilot-shell">
@@ -521,7 +612,7 @@
     <section id="privacy" class="privacy-section">
       <h2>Important limits and channel safety</h2>
       <p>ClipFree does not add a watermark or application-level clip counter. Browser memory, CPU/GPU speed, source-video size, API quotas and YouTube account/API restrictions still create practical limits. No tool can guarantee subscribers, views or watch hours. This build is designed to improve workflow and use your real channel data, not fake engagement.</p>
-      <p>For reused material, Creative Commons licensing and attribution are only part of the picture. Copyright, commercial-use rights and YouTube's reused/inauthentic-content monetization rules can still apply. Add substantial original commentary, editing or value instead of simply reposting another creator's video.</p>
+      <p>For reused material, Creative Commons licensing and attribution are only part of the picture. Copyright, commercial-use rights and YouTube's reused/inauthentic-content monetization rules can still apply. Originality Guard automatically adds a distinct educational storyline and visible commentary to externally sourced footage, checks for repeated sources, and keeps higher-risk outputs Private for review. This reduces risk but cannot guarantee YouTube Partner Program approval.</p>
     </section>
   </main>
 
@@ -531,5 +622,8 @@
   <script type="module" src="youtube.js"></script>
   <script type="module" src="animal-generator.js"></script>
   <script type="module" src="site.js"></script>
+  <script type="module" src="premium-auto.js"></script>
+  <script type="module" src="originality-guard.js"></script>
+  <script type="module" src="category-pages.js"></script>
 </body>
 </html>
