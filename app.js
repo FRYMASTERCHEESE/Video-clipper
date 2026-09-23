@@ -76,6 +76,32 @@ function baseFileName(name = '') {
   return name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function cleanSourceTitle(name = '') {
+  return baseFileName(String(name || '').replace(/^File:/i, '')).replace(/\b(?:webm|mp4|ogv|mov)$/i, '').trim();
+}
+
+function autoPickScore(duration, targetLength, hasMetadata = false) {
+  const closeness = Math.max(0, 20 - Math.abs(Number(duration || 0) - Number(targetLength || 0)) * 0.8);
+  const metadataBonus = hasMetadata ? 8 : 0;
+  return Math.max(72, Math.min(96, Math.round(68 + closeness + metadataBonus)));
+}
+
+function buildStoryChunks(meta, duration) {
+  const captions = Array.isArray(meta?.captions) ? meta.captions.filter(Boolean) : [];
+  const storySentences = String(meta?.story || '')
+    .split(/(?<=[.!?])\s+/)
+    .map(x => x.trim())
+    .filter(Boolean);
+  const lines = (captions.length ? captions : storySentences).slice(0, 6);
+  if (!lines.length) return [];
+  const total = Math.max(1, Number(duration || 1));
+  const chunk = total / lines.length;
+  return lines.map((line, i) => ({
+    text: line,
+    timestamp: [Math.max(0, i * chunk), Math.min(total, (i + 1) * chunk)],
+  }));
+}
+
 async function ensureFFmpeg() {
   if (ffmpeg?.loaded) return ffmpeg;
   setStatus('Loading video engine', 8, 'First run downloads the free FFmpeg WebAssembly engine.');
@@ -273,7 +299,7 @@ function renderHighlights(items) {
   highlightsEl.className = 'highlights';
   highlightsEl.innerHTML = items.map((c, idx) => `
     <article class="highlight" data-index="${idx}">
-      <div class="highlight-top"><span>${idx === 0 ? '★ Best pick • ' : ''}${fmt(c.start)} – ${fmt(c.end)} • ${Math.round(c.end - c.start)}s</span><span class="score">score ${c.score}</span></div>
+      <div class="highlight-top"><span>${idx === 0 ? '★ Best pick • ' : ''}${fmt(c.start)} – ${fmt(c.end)} • ${Math.round(c.end - c.start)}s</span><span class="score">${c.scoreLabel || `score ${c.score}`}</span></div>
       <p>${escapeHtml(c.text.slice(0, 230))}${c.text.length > 230 ? '…' : ''}</p>
     </article>
   `).join('');
@@ -359,7 +385,10 @@ function generateSeoForText(text) {
   const clean = cleanSentence(text);
   const keywords = getKeywords(clean, 10);
   const fileTopic = baseFileName(inputFile?.name || '');
-  const title = sourceMeta?.kind === 'animal-generator' && sourceMeta?.title ? String(sourceMeta.title).slice(0, 100) : makeSeoTitle(clean);
+  const sourceTitle = cleanSourceTitle(sourceMeta?.title || '');
+  const title = sourceMeta?.kind === 'animal-generator' && sourceMeta?.title
+    ? cleanSourceTitle(sourceMeta.title).slice(0, 100)
+    : (!transcriptText.trim() && sourceTitle ? makeSeoTitle(sourceTitle) : makeSeoTitle(clean));
   const excerpt = clean.length > 340 ? `${clean.slice(0, 337).replace(/\s+\S*$/, '')}…` : clean;
   const hashtags = [...new Set(['#Shorts', ...keywords.slice(0, 4).map(hashtagify).filter(Boolean)])].join(' ');
   const tagItems = [...new Set([
@@ -390,6 +419,21 @@ async function runAutomaticAnalysis(fromUpload = false) {
   downloadPanel.classList.add('hidden');
 
   try {
+    if (sourceMeta?.kind === 'animal-generator' && (sourceMeta?.story || sourceMeta?.captions?.length)) {
+      const duration = Number.isFinite(preview.duration) ? preview.duration : Number(clipLength.value) || 24;
+      const target = Math.min(Math.max(9, Number(sourceMeta?.targetDuration) || Number(clipLength.value) || 24), Math.max(1, duration));
+      transcriptChunks = buildStoryChunks(sourceMeta, target);
+      renderTranscript();
+      const text = sourceMeta?.story || transcriptText || cleanSourceTitle(sourceMeta?.title || inputFile?.name || '') || 'Animal Short';
+      const score = autoPickScore(target, target, true);
+      renderHighlights([{ start: 0, end: target, text, score, scoreLabel: `AUTO score ${score}` }]);
+      selectHighlight(0, false);
+      setStatus('Animal Short package ready', 88, autoExport.checked ? 'Vertical 9:16 montage, story captions, SEO and thumbnail are ready. Exporting now…' : 'Animal Short is ready to export.');
+      if (autoExport.checked) await exportSelectedClip(true);
+      else setStatus('Automatic animal package complete', 100, 'Story captions, SEO and thumbnail are ready.');
+      return;
+    }
+
     const pcm = await extractAudio();
     const asr = await ensureTranscriber();
     setStatus('Transcribing with AI', 55, 'This runs on your device. Longer videos take longer, especially on phones.');
@@ -416,8 +460,9 @@ async function runAutomaticAnalysis(fromUpload = false) {
       const target = Math.min(Math.max(12, Number(clipLength.value) || 45), Math.max(1, duration));
       const fallbackStart = Math.max(0, (duration - target) * 0.35);
       const fallbackEnd = Math.min(duration, fallbackStart + target);
-      const fallbackText = transcriptText.trim() || sourceMeta?.story || sourceMeta?.title || baseFileName(inputFile?.name || '') || 'Video highlight';
-      renderHighlights([{ start: fallbackStart, end: fallbackEnd, text: fallbackText, score: 0 }]);
+      const fallbackText = transcriptText.trim() || sourceMeta?.story || cleanSourceTitle(sourceMeta?.title || '') || baseFileName(inputFile?.name || '') || 'Video highlight';
+      const fallbackScore = autoPickScore(fallbackEnd - fallbackStart, target, Boolean(sourceMeta));
+      renderHighlights([{ start: fallbackStart, end: fallbackEnd, text: fallbackText, score: fallbackScore, scoreLabel: `AUTO score ${fallbackScore}` }]);
       selectHighlight(0, false);
       setStatus('Fallback highlight ready', 88, autoExport.checked ? 'No strong spoken highlight was found, so FULL AUTO selected a timed clip and is exporting it now…' : 'A timed fallback clip is selected.');
       if (autoExport.checked) await exportSelectedClip(true);
@@ -431,8 +476,9 @@ async function runAutomaticAnalysis(fromUpload = false) {
         const target = Math.min(Math.max(12, Number(clipLength.value) || 45), duration);
         const start = Math.max(0, (duration - target) * 0.35);
         const end = Math.min(duration, start + target);
-        const text = sourceMeta?.story || sourceMeta?.title || baseFileName(inputFile?.name || '') || 'Video highlight';
-        renderHighlights([{ start, end, text, score: 0 }]);
+        const text = sourceMeta?.story || cleanSourceTitle(sourceMeta?.title || '') || baseFileName(inputFile?.name || '') || 'Video highlight';
+        const fallbackScore = autoPickScore(end - start, target, Boolean(sourceMeta));
+        renderHighlights([{ start, end, text, score: fallbackScore, scoreLabel: `AUTO score ${fallbackScore}` }]);
         selectHighlight(0, false);
         setStatus('Using no-transcript fallback', 75, 'Speech AI could not finish, so FULL AUTO is creating a timed clip with source-based SEO instead.');
         await exportSelectedClip(true);
@@ -518,14 +564,22 @@ async function buildAutoThumbnail(title) {
     gradient.addColorStop(1, 'rgba(0,0,0,.82)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 300, 1280, 420);
-    ctx.font = '800 72px Arial, sans-serif';
+    const badgeText = sourceMeta?.kind === 'animal-generator' ? 'WILDLIFE SHORT' : 'NEW SHORT';
+    ctx.font = '800 30px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.96)';
+    ctx.fillText(badgeText, 82, 430);
+    ctx.fillStyle = 'rgba(0,0,0,.58)';
+    ctx.fillRect(66, 382, Math.max(235, ctx.measureText(badgeText).width + 44), 64);
     ctx.fillStyle = '#ffffff';
+    ctx.fillText(badgeText, 88, 426);
+    ctx.font = '900 74px Arial, sans-serif';
     ctx.textBaseline = 'bottom';
-    ctx.shadowColor = 'rgba(0,0,0,.75)';
-    ctx.shadowBlur = 14;
-    const lines = wrapCanvasText(ctx, title || 'New Video', 1110, 3);
-    const lineHeight = 84;
-    const startY = 650 - (lines.length - 1) * lineHeight;
+    ctx.shadowColor = 'rgba(0,0,0,.82)';
+    ctx.shadowBlur = 16;
+    const cleanTitle = cleanSourceTitle(title || '') || 'Amazing Animal Moment';
+    const lines = wrapCanvasText(ctx, cleanTitle, 1110, 3);
+    const lineHeight = 86;
+    const startY = 660 - (lines.length - 1) * lineHeight;
     lines.forEach((line, i) => ctx.fillText(line, 80, startY + i * lineHeight, 1110));
     preview.currentTime = oldTime;
     return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .9));
@@ -614,7 +668,7 @@ async function createMontageFromFiles(files, options = {}) {
       await ff.exec([
         '-i', inName, '-t', perClip.toFixed(2),
         '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,fps=24',
-        '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '25', '-pix_fmt', 'yuv420p', outName
+        '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', outName
       ]);
       segments.push(outName);
     } catch (err) {
@@ -624,16 +678,42 @@ async function createMontageFromFiles(files, options = {}) {
 
   if (!segments.length) throw new Error('The browser could not convert any of the selected animal source clips. Try again with another topic.');
   const concatName = 'montage_list.txt';
+  const silentName = 'animal-montage-silent.mp4';
   const montageName = 'animal-montage.mp4';
-  try { await ff.deleteFile(concatName); } catch {}
-  try { await ff.deleteFile(montageName); } catch {}
+  for (const name of [concatName, silentName, montageName, 'animal_sound_input']) { try { await ff.deleteFile(name); } catch {} }
   const listText = segments.map(name => `file '${name}'`).join('\n');
   await ff.writeFile(concatName, new TextEncoder().encode(listText));
-  await ff.exec(['-f', 'concat', '-safe', '0', '-i', concatName, '-c', 'copy', '-movflags', '+faststart', montageName]);
+  await ff.exec(['-f', 'concat', '-safe', '0', '-i', concatName, '-c', 'copy', '-movflags', '+faststart', silentName]);
+
+  let usedAnimalSound = false;
+  if (options.audioFile) {
+    const audioExt = getInputExtension(options.audioFile) || 'ogg';
+    const audioName = `animal_sound_input.${audioExt}`;
+    try { await ff.deleteFile(audioName); } catch {}
+    await ff.writeFile(audioName, await fetchFile(options.audioFile));
+    const fadeOutAt = Math.max(0.5, targetSeconds - 0.8).toFixed(2);
+    try {
+      await ff.exec([
+        '-i', silentName, '-stream_loop', '-1', '-i', audioName,
+        '-map', '0:v:0', '-map', '1:a:0', '-t', targetSeconds.toFixed(2),
+        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+        '-af', `volume=0.82,afade=t=in:st=0:d=0.35,afade=t=out:st=${fadeOutAt}:d=0.8`,
+        '-movflags', '+faststart', '-shortest', montageName
+      ]);
+      usedAnimalSound = true;
+    } catch (err) {
+      console.warn('Real animal sound could not be mixed; keeping the visual montage', err);
+    }
+  }
+  if (!usedAnimalSound) {
+    await ff.exec(['-i', silentName, '-c', 'copy', '-movflags', '+faststart', montageName]);
+  }
+
   const data = await ff.readFile(montageName);
   const blob = new Blob([data.buffer], { type: 'video/mp4' });
   const file = new File([blob], options.filename || 'clipfree-ai-animal-short.mp4', { type: 'video/mp4' });
-  setStatus('Animal montage ready', 45, 'The new montage is ready for automatic SEO, captions, thumbnail and YouTube upload.');
+  file.clipfreeUsedAnimalSound = usedAnimalSound;
+  setStatus('Animal montage ready', 45, usedAnimalSound ? 'Vertical 9:16 montage created with real open-licensed animal audio.' : 'Vertical 9:16 montage created. No matching animal audio could be mixed, so the video remains clean and ready for captions.');
   return file;
 }
 

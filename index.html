@@ -69,7 +69,13 @@
           <div class="card-body form-grid">
             <h3>Option 1 — Find a free video automatically</h3>
             <label><span>Topic</span><input id="autoTopic" type="search" placeholder="e.g. lions, wildlife, animal rescue" /></label>
-            <button id="autoFindCreateUpload" class="primary">Find free video → create → upload</button>
+            <label><span>How many vertical Shorts?</span>
+              <select id="autoBatchCount">
+                <option value="1" selected>1 Short</option><option value="2">2 Shorts</option><option value="3">3 Shorts</option><option value="4">4 Shorts</option>
+                <option value="5">5 Shorts</option><option value="6">6 Shorts</option><option value="7">7 Shorts</option><option value="8">8 Shorts</option>
+              </select>
+            </label>
+            <button id="autoFindCreateUpload" class="primary">Find free videos → create → upload batch</button>
             <div id="autoFinderStatus" class="notice subtle">Uses Wikimedia Commons videos with straightforward reuse licences such as Public Domain, CC0 or CC BY. ClipFree keeps source/licence attribution with the upload.</div>
           </div>
         </section>
@@ -78,11 +84,11 @@
           <div class="card-body form-grid">
             <h3>Option 2 — Use your own video</h3>
             <label class="upload-box compact-upload" for="autoLocalFile">
-              <input id="autoLocalFile" type="file" accept="video/*" />
-              <strong id="autoLocalFileLabel">Choose one video</strong>
-              <span>After you choose it, the full workflow starts automatically.</span>
+              <input id="autoLocalFile" type="file" accept="video/*" multiple />
+              <strong id="autoLocalFileLabel">Choose 1–8 videos</strong>
+              <span>ClipFree processes and uploads them one at a time so your phone uses less memory.</span>
             </label>
-            <button id="autoStartLocal" class="primary" disabled>Auto create + upload this video</button>
+            <button id="autoStartLocal" class="primary" disabled>Auto create + upload selected videos</button>
           </div>
         </section>
       </div>
@@ -107,8 +113,8 @@
       <div class="section-title">
         <div>
           <div class="badge">FREE AI-ASSISTED ANIMAL SHORTS GENERATOR</div>
-          <h2>Lions, wildlife, kittens and puppies — one tap.</h2>
-          <p>ClipFree finds multiple reusable animal clips from Wikimedia Commons, builds a fresh vertical montage in your browser, creates a story/caption pack, then sends it through the same automatic YouTube workflow: 9:16 export, SEO, thumbnail, captions, attribution, upload and Shorts playlist.</p>
+          <h2>Lions, wildlife, kittens and puppies — up to 8 at once.</h2>
+          <p>ClipFree finds multiple reusable animal clips from Wikimedia Commons, builds fresh vertical 9:16 montages in your browser, adds open-licensed real animal sounds when available, creates story captions and stronger thumbnails, then sends every Short through SEO, attribution, upload and Shorts-playlist automation.</p>
         </div>
       </div>
 
@@ -139,8 +145,15 @@
                 <option value="30">About 30 seconds</option>
               </select>
             </label>
-            <button id="generateAnimalVideo" class="primary big-auto-button" type="button">✨ Generate animal Short + upload</button>
-            <div id="animalGeneratorStatus" class="notice subtle">No paid AI key required. This free mode creates a new montage from reusable open-licensed media and automatically keeps the source credits.</div>
+            <label><span>How many Shorts in this batch?</span>
+              <select id="animalBatchCount">
+                <option value="1" selected>1 Short</option><option value="2">2 Shorts</option><option value="3">3 Shorts</option><option value="4">4 Shorts</option>
+                <option value="5">5 Shorts</option><option value="6">6 Shorts</option><option value="7">7 Shorts</option><option value="8">8 Shorts</option>
+              </select>
+            </label>
+            <label class="checkline"><input id="animalSounds" type="checkbox" checked /> Add real open-licensed animal sounds automatically when a suitable recording is available</label>
+            <button id="generateAnimalVideo" class="primary big-auto-button" type="button">✨ Generate + upload animal Shorts</button>
+            <div id="animalGeneratorStatus" class="notice subtle">Choose 1–8. ClipFree creates each vertical 9:16 Short one at a time, adds SEO, story captions, thumbnail, attribution and real animal audio when available, then uploads automatically.</div>
             <div class="progress"><div id="animalGeneratorProgress"></div></div>
           </div>
         </section>

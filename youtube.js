@@ -6,7 +6,7 @@ const els = {
   metricViews: $('metricViews'), metricWatch: $('metricWatchHours'), metricAvg: $('metricAvgDuration'), metricSubs: $('metricNetSubs'),
   snapshot: $('channelSnapshot'), plan: $('growthPlan'), audit: $('videoAuditTable'),
   channelDescription: $('channelDescriptionDraft'), generateDescription: $('generateChannelDescription'), applyDescription: $('applyChannelDescription'), autoOptimizeChannel: $('autoOptimizeChannel'),
-  autoTopic: $('autoTopic'), autoFind: $('autoFindCreateUpload'), autoFinderStatus: $('autoFinderStatus'), commonsResults: $('commonsResults'),
+  autoTopic: $('autoTopic'), autoBatchCount: $('autoBatchCount'), autoFind: $('autoFindCreateUpload'), autoFinderStatus: $('autoFinderStatus'), commonsResults: $('commonsResults'),
   autoLocalFile: $('autoLocalFile'), autoLocalFileLabel: $('autoLocalFileLabel'), autoStartLocal: $('autoStartLocal'),
   autoStatusText: $('autoStatusText'), autoProgressBar: $('autoProgressBar'), autoStatusDetail: $('autoStatusDetail'),
   ccQuery: $('ccSearchQuery'), ccButton: $('ccSearchButton'), ccStatus: $('ccFinderStatus'), ccResults: $('ccResults'),
@@ -35,8 +35,11 @@ const state = {
   generatedExport: null,
   uploadFile: null,
   autoUploadQueued: false,
-  autoLocalSelected: null,
+  autoLocalSelected: [],
   autoSource: null,
+  autoJobResolve: null,
+  autoJobReject: null,
+  batchRunning: false,
 };
 
 function esc(value = '') {
@@ -827,7 +830,13 @@ async function downloadCommonsFile(item) {
 async function startFullAutoWithFile(file, source = null) {
   if (!file) throw new Error('No video file was selected.');
   if (!window.ClipFreeAutomation?.loadVideoFile) throw new Error('ClipFree video engine has not loaded yet. Refresh the page and try again.');
+  if (state.autoUploadQueued) throw new Error('Another FULL AUTO upload is still running. Wait for it to finish.');
   await ensureFullAutoConnection();
+
+  const completion = new Promise((resolve, reject) => {
+    state.autoJobResolve = resolve;
+    state.autoJobReject = reject;
+  });
   state.autoUploadQueued = true;
   state.autoSource = source;
   els.uploadPrivacy.value = 'private';
@@ -836,58 +845,94 @@ async function startFullAutoWithFile(file, source = null) {
   if (els.uploadThumbnail) els.uploadThumbnail.checked = true;
   els.notifySubscribers.checked = false;
   els.uploadCategory.value = chooseAutoCategory(source);
-  setAutoStatus('AI processing', 20, 'Transcribing, finding the strongest moment, creating a 9:16 Short, captions, thumbnail and YouTube SEO. Keep this tab open.', 'good');
-  await window.ClipFreeAutomation.loadVideoFile(file, source, true);
-  document.querySelector('#studio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setAutoStatus('AI processing', 20, 'Creating a vertical 9:16 Short, captions, thumbnail, YouTube SEO and attribution. Keep this tab open.', 'good');
+  try {
+    await window.ClipFreeAutomation.loadVideoFile(file, source, true);
+    document.querySelector('#studio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    state.autoUploadQueued = false;
+    const reject = state.autoJobReject;
+    state.autoJobResolve = null;
+    state.autoJobReject = null;
+    reject?.(err);
+    throw err;
+  }
+  return completion;
 }
 
 async function useCommonsVideo(item) {
   try {
     const file = await downloadCommonsFile(item);
-    await startFullAutoWithFile(file, item);
+    return await startFullAutoWithFile(file, item);
   } catch (err) {
     console.error(err);
     state.autoUploadQueued = false;
     setAutoStatus('FULL AUTO stopped', 0, err.message || String(err), 'bad');
+    throw err;
   }
 }
 
 if (els.autoFind) els.autoFind.addEventListener('click', async () => {
   const topic = (els.autoTopic?.value || '').trim() || suggestAutoTopic();
   if (els.autoTopic && !els.autoTopic.value.trim()) els.autoTopic.value = topic;
+  const batchCount = Math.max(1, Math.min(8, Number(els.autoBatchCount?.value) || 1));
   els.autoFind.disabled = true;
+  state.batchRunning = true;
   try {
-    setAutoStatus('Finding free video', 5, `Searching Wikimedia Commons for “${topic}”…`);
-    setNotice(els.autoFinderStatus, 'Searching open-licensed downloadable videos…');
-    const items = await searchCommonsDownloadable(topic, 12);
+    setAutoStatus('Finding free videos', 5, `Searching Wikimedia Commons for “${topic}”…`);
+    setNotice(els.autoFinderStatus, `Searching open-licensed downloadable videos for a ${batchCount}-Short batch…`);
+    const items = await searchCommonsDownloadable(topic, 20);
     renderCommonsResults(items);
     if (!items.length) throw new Error('No suitable open-licensed video was found. Try another topic.');
-    setNotice(els.autoFinderStatus, `Found ${items.length} open-licensed downloadable video${items.length === 1 ? '' : 's'}. FULL AUTO is using the first suitable result.`, 'good');
-    await useCommonsVideo(items[0]);
+    const selected = items.slice(0, Math.min(batchCount, items.length));
+    setNotice(els.autoFinderStatus, `Found ${items.length} suitable videos. Processing ${selected.length} Short${selected.length === 1 ? '' : 's'} one at a time.`, 'good');
+    for (let i = 0; i < selected.length; i++) {
+      setAutoStatus(`Batch ${i + 1}/${selected.length}`, 6 + Math.round((i / selected.length) * 88), `Creating and uploading Short ${i + 1} of ${selected.length}: “${selected[i].title}”`, 'good');
+      await useCommonsVideo(selected[i]);
+    }
+    setAutoStatus('Batch complete', 100, `${selected.length} Short${selected.length === 1 ? '' : 's'} finished. Each was created and uploaded sequentially.`, 'good');
   } catch (err) {
     console.error(err);
     state.autoUploadQueued = false;
     setNotice(els.autoFinderStatus, err.message || String(err), 'bad');
-    setAutoStatus('FULL AUTO stopped', 0, err.message || String(err), 'bad');
+    setAutoStatus('FULL AUTO batch stopped', 0, err.message || String(err), 'bad');
   } finally {
+    state.batchRunning = false;
     els.autoFind.disabled = false;
   }
 });
 
+async function runLocalBatch(files) {
+  const selected = Array.from(files || []).filter(Boolean).slice(0, 8);
+  if (!selected.length) return;
+  state.batchRunning = true;
+  els.autoStartLocal.disabled = true;
+  try {
+    for (let i = 0; i < selected.length; i++) {
+      setAutoStatus(`Local batch ${i + 1}/${selected.length}`, 5 + Math.round((i / selected.length) * 90), `Processing ${selected[i].name} — Short ${i + 1} of ${selected.length}.`, 'good');
+      await startFullAutoWithFile(selected[i], null);
+    }
+    setAutoStatus('Local batch complete', 100, `${selected.length} video${selected.length === 1 ? '' : 's'} processed and uploaded one at a time.`, 'good');
+  } finally {
+    state.batchRunning = false;
+    els.autoStartLocal.disabled = false;
+  }
+}
+
 if (els.autoLocalFile) els.autoLocalFile.addEventListener('change', async () => {
-  const file = els.autoLocalFile.files?.[0];
-  if (!file) return;
-  state.autoLocalSelected = file;
-  els.autoLocalFileLabel.textContent = `${file.name} — starting automatically…`;
+  const files = Array.from(els.autoLocalFile.files || []).slice(0, 8);
+  if (!files.length) return;
+  state.autoLocalSelected = files;
+  els.autoLocalFileLabel.textContent = `${files.length} video${files.length === 1 ? '' : 's'} selected — starting FULL AUTO…`;
   els.autoStartLocal.disabled = false;
-  try { await startFullAutoWithFile(file, null); }
-  catch (err) { console.error(err); setAutoStatus('FULL AUTO stopped', 0, err.message || String(err), 'bad'); }
+  try { await runLocalBatch(files); }
+  catch (err) { console.error(err); setAutoStatus('FULL AUTO batch stopped', 0, err.message || String(err), 'bad'); }
 });
 
 if (els.autoStartLocal) els.autoStartLocal.addEventListener('click', async () => {
-  if (!state.autoLocalSelected) return;
-  try { await startFullAutoWithFile(state.autoLocalSelected, null); }
-  catch (err) { console.error(err); setAutoStatus('FULL AUTO stopped', 0, err.message || String(err), 'bad'); }
+  if (!state.autoLocalSelected?.length || state.batchRunning) return;
+  try { await runLocalBatch(state.autoLocalSelected); }
+  catch (err) { console.error(err); setAutoStatus('FULL AUTO batch stopped', 0, err.message || String(err), 'bad'); }
 });
 
 window.addEventListener('clipfree-export-ready', async (event) => {
@@ -910,11 +955,19 @@ window.addEventListener('clipfree-export-ready', async (event) => {
     const result = await uploadToYouTube({ rethrow: true });
     state.autoUploadQueued = false;
     const link = result?.id ? `https://www.youtube.com/watch?v=${result.id}` : '';
-    setAutoStatus('FULL AUTO complete', 100, `Finished: clip, captions, thumbnail, SEO, attribution, upload${playlistId ? ' and playlist' : ''}.${link ? ' The video is now on your YouTube channel.' : ''}`, 'good');
+    setAutoStatus('FULL AUTO complete', 100, `Finished: vertical Short, captions, thumbnail, SEO, attribution, upload${playlistId ? ' and playlist' : ''}.${link ? ' The video is now on your YouTube channel.' : ''}`, 'good');
+    const resolve = state.autoJobResolve;
+    state.autoJobResolve = null;
+    state.autoJobReject = null;
+    resolve?.(result);
   } catch (err) {
     console.error(err);
     state.autoUploadQueued = false;
     setAutoStatus('Upload needs attention', 75, err.message || String(err), 'bad');
+    const reject = state.autoJobReject;
+    state.autoJobResolve = null;
+    state.autoJobReject = null;
+    reject?.(err);
   }
 });
 
