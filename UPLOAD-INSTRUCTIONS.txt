@@ -1,32 +1,34 @@
-CLIPFREE PREMIUM AUTO V3 — ORIGINALITY GUARD
+CLIPFREE AI — PRIVATE GOOGLE OAUTH TEST ROUTE
 
-Upload/replace these 4 files in the ROOT of your GitHub Video-clipper repository:
+UPLOAD THESE 3 FILES TO THE ROOT OF:
+FRYMASTERCHEESE/Video-clipper
 
-1. index.html                  REPLACE
-2. premium-auto.js             REPLACE
-3. category-pages.js           REPLACE
-4. originality-guard.js        ADD NEW
+1. index.html
+   Replace the existing public index.html.
+   This removes the Demo link/panel from the public homepage.
 
-DO NOT DELETE your existing app.js, youtube.js, site.js, animal-generator.js,
-ffmpeg-worker.js, styles.css, config files, privacy.html or terms.html.
+2. youtube.js
+   Replace the existing youtube.js.
+   While verification is pending, Google OAuth token requests are blocked on the public homepage.
+   OAuth remains enabled on oauth-demo.html.
 
-WHAT ORIGINALITY GUARD AUTOMATES
-- Detects externally sourced / Commons footage
-- Builds a different educational storyline for every generated Short
-- Generates 5 distinct educational commentary/caption cards
-- Burns those commentary cards visibly into the final 9:16 video
-- Keeps the existing SRT captions
-- Preserves source attribution
-- Checks repeated source combinations during the session
-- Uses multi-source count from Animal AI montages
-- If only one external source is used, forces the upload to Private for manual review
-- If attribution cannot be confirmed, forces Private
-- If visible-commentary rendering fails, forces Private
-- Adds an Originality Guard status panel to the website
-- Works alongside Premium Auto unique titles, brighter thumbnails and category pages
+3. oauth-demo.html
+   ADD this as a NEW file.
+   Do not rename it.
 
-IMPORTANT
-This is designed to make the workflow meaningfully more transformative and safer
-for YouTube monetization review, but NO software can guarantee YouTube Partner
-Program approval. YouTube reviews the channel as a whole. Rights/copyright rules
-also still apply separately.
+PRIVATE TEST URL AFTER GITHUB PAGES UPDATES:
+https://frymastercheese.github.io/Video-clipper/oauth-demo.html
+
+WHAT THE PRIVATE ROUTE DOES
+- noindex / nofollow / noarchive
+- not linked from the public ClipFree homepage
+- hides unrelated sections during the recording
+- keeps the real Privacy, OAuth, Analytics, Upload and Disconnect features
+- uses the same real ClipFree code and OAuth scopes
+- top status changes from not connected → connecting → connected
+
+RECORDING ORDER
+Privacy Policy → Connect YouTube → Google warning/consent → Analytics → Upload Tools → Disconnect
+
+AFTER GOOGLE APPROVES OAUTH
+The temporary public-route OAuth block should be removed so normal users can connect from the public site again.

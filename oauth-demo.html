@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0b0b10" />
-  <title>ClipFree AI — Video Clipper + YouTube Growth Suite</title>
+  <title>ClipFree AI — Google OAuth Verification Test Route</title>
   <meta name="description" content="Automatic browser-based AI clipping, YouTube SEO, channel analytics, Creative Commons discovery and YouTube uploads. No watermark added by the app." />
   <meta name="keywords" content="AI video clipper, YouTube Shorts, YouTube SEO, channel analytics, Creative Commons video finder, no watermark video clipper" />
-  <meta name="robots" content="index,follow" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="ClipFree AI — Video Clipper + YouTube Growth Suite" />
   <meta property="og:description" content="Clip videos, build YouTube metadata, review channel performance and upload from one browser-based tool." />
@@ -25,11 +25,36 @@
     "description":"Browser-based AI-assisted video clipping, YouTube metadata generation, analytics and channel workflow tools."
   }
   </script>
+
+  <style>
+    /* Private verification route: keep all required DOM in place, but hide unrelated UI. */
+    body.oauth-demo-route .hero,
+    body.oauth-demo-route #category-wizard,
+    body.oauth-demo-route #autopilot,
+    body.oauth-demo-route #animal-generator,
+    body.oauth-demo-route #studio,
+    body.oauth-demo-route #finder,
+    body.oauth-demo-route #donate { display:none !important; }
+    body.oauth-demo-route #verification-demo { padding-top:18px !important; }
+    .oauth-test-route-banner {
+      padding:10px 14px;
+      text-align:center;
+      font-weight:900;
+      background:#2b1f09;
+      color:#ffd978;
+      border-bottom:1px solid #735c20;
+    }
+  </style>
+
 </head>
-<body>
+<body class="oauth-demo-route">
+  <div class="oauth-test-route-banner">
+    PRIVATE TEST ROUTE — Google OAuth verification recording only
+  </div>
   <header class="topbar">
     <a class="brand" href="#">ClipFree <span>AI</span></a>
     <nav>
+      <a href="#verification-demo">Demo</a>
       <a href="#category-wizard">Categories</a>
       <a href="#autopilot">Full Auto</a>
       <a href="#animal-generator">Animal AI</a>
@@ -61,6 +86,28 @@
       </div>
     </section>
 
+
+    <section id="verification-demo" class="growth-shell" style="padding-top:18px;padding-bottom:18px">
+      <section class="growth-card wide-card" style="border:1px solid rgba(139,92,246,.55)">
+        <div class="card-body">
+          <div class="badge">GOOGLE VERIFICATION DEMO • QUICK ACCESS</div>
+          <h2 style="margin-bottom:8px">Everything for the OAuth demo is together here.</h2>
+          <p class="subcopy" style="margin-bottom:14px">This unlisted/noindex test route is for the Google OAuth verification recording. Use the buttons below in order. The OAuth permissions and real ClipFree features are unchanged.</p>
+
+          <div class="hero-actions" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+            <a class="secondary" href="privacy.html">1. Privacy Policy</a>
+            <button id="demoConnectYoutube" class="primary" type="button">2. Connect YouTube</button>
+            <a class="secondary" href="#youtube-growth">3. Analytics</a>
+            <a class="secondary" href="#upload">4. Upload Tools</a>
+            <button id="demoDisconnectYoutube" class="secondary" type="button">5. Disconnect</button>
+          </div>
+
+          <div class="notice subtle" style="margin-top:14px">
+            <strong>Fast recording order:</strong> Privacy → Connect → Google consent → Analytics → Upload Tools → Disconnect.
+          </div>
+        </div>
+      </section>
+    </section>
 
     <section id="category-wizard" class="growth-shell">
       <div class="section-title">
@@ -643,5 +690,26 @@
   <script type="module" src="premium-auto.js"></script>
   <script type="module" src="originality-guard.js"></script>
   <script type="module" src="category-pages.js"></script>
+  <script>
+    (() => {
+      const demoConnect = document.getElementById('demoConnectYoutube');
+      const demoDisconnect = document.getElementById('demoDisconnectYoutube');
+
+      demoConnect?.addEventListener('click', () => {
+        document.getElementById('connectYoutube')?.click();
+      });
+
+      demoDisconnect?.addEventListener('click', () => {
+        document.getElementById('disconnectYoutube')?.click();
+      });
+    })();
+  </script>
+
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => document.getElementById('verification-demo')?.scrollIntoView({block:'start'}), 250);
+    });
+  </script>
+
 </body>
 </html>
