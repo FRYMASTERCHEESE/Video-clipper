@@ -341,33 +341,109 @@ function setTopYoutubeStatus(status = 'disconnected', channelTitle = '') {
   banner.style.borderColor = '#272735';
 }
 
-async function connectYoutube() {
+
+function emitYoutubeState(status, detail = {}) {
   try {
-    setTopYoutubeStatus('connecting');
-    els.connect.disabled = true;
-    els.connect.innerHTML = '<span class="spinner"></span>Connecting';
-    setNotice(els.connection, 'Opening Google sign-in…');
-    await requestAccessToken();
-    await refreshAllChannelData();
+    window.dispatchEvent(new CustomEvent('clipfree-youtube-state', {
+      detail: { status, ...detail }
+    }));
+  } catch {}
+}
+
+function setYoutubeConnectedUi(channelTitle = '') {
+  if (els.connect) {
     els.connect.classList.add('hidden');
-    els.disconnect.classList.remove('hidden');
-    setTopYoutubeStatus('connected', state.channel?.snippet?.title || 'your YouTube channel');
-    setNotice(els.connection, `Connected to ${state.channel?.snippet?.title || 'your YouTube channel'}.`, 'good');
-  } catch (err) {
-    console.error(err);
-    els.connect.classList.remove('hidden');
-    els.disconnect.classList.add('hidden');
-    setTopYoutubeStatus('disconnected');
-    setNotice(els.connection, err.message || String(err), 'bad');
-  } finally {
     els.connect.disabled = false;
     els.connect.textContent = 'Connect YouTube';
+  }
+  if (els.disconnect) {
+    els.disconnect.classList.remove('hidden');
+    els.disconnect.disabled = false;
+  }
+  setTopYoutubeStatus('connected', channelTitle);
+  setConnectedControls(true);
+  refreshUploadState();
+  emitYoutubeState('connected', { channelTitle });
+}
+
+function setYoutubeDisconnectedUi(message = 'YouTube is not connected. Your saved Client ID remains on this device.') {
+  if (els.connect) {
+    els.connect.classList.remove('hidden');
+    els.connect.disabled = false;
+    els.connect.textContent = 'Connect YouTube';
+  }
+  if (els.disconnect) {
+    els.disconnect.classList.add('hidden');
+    els.disconnect.disabled = false;
+  }
+  setTopYoutubeStatus('disconnected');
+  setConnectedControls(false);
+  refreshUploadState();
+  if (els.connection) setNotice(els.connection, message, 'subtle');
+  emitYoutubeState('disconnected');
+}
+
+async function connectYoutube() {
+  if (state.accessToken && Date.now() < state.expiresAt) {
+    setYoutubeConnectedUi(state.channel?.snippet?.title || 'your YouTube channel');
+    if (els.connection) setNotice(els.connection, 'YouTube is already connected.', 'good');
+    return;
+  }
+
+  try {
+    setTopYoutubeStatus('connecting');
+    emitYoutubeState('connecting');
+
+    if (els.connect) {
+      els.connect.disabled = true;
+      els.connect.innerHTML = '<span class="spinner"></span>Connecting';
+    }
+    if (els.disconnect) els.disconnect.disabled = true;
+    setNotice(els.connection, 'Opening Google sign-in…');
+
+    // OAuth success means the user IS connected, even if a later data request fails.
+    await requestAccessToken();
+    setYoutubeConnectedUi('Google access granted');
+    setNotice(els.connection, 'Google access granted. Loading your YouTube channel…', 'good');
+
+    try {
+      await refreshAllChannelData();
+      const title = state.channel?.snippet?.title || 'your YouTube channel';
+      setYoutubeConnectedUi(title);
+      setNotice(els.connection, `Connected to ${title}.`, 'good');
+    } catch (dataErr) {
+      console.error('YouTube data refresh failed after OAuth success:', dataErr);
+      // Keep the authenticated state. Do NOT falsely show "not connected".
+      setYoutubeConnectedUi(state.channel?.snippet?.title || 'Google access granted');
+      setNotice(
+        els.connection,
+        `Google connection succeeded, but some YouTube data could not load yet: ${dataErr?.message || dataErr}`,
+        'bad'
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    // Only show disconnected if OAuth itself failed and no valid token exists.
+    if (!state.accessToken) {
+      setYoutubeDisconnectedUi(err?.message || String(err));
+      if (els.connection) setNotice(els.connection, err?.message || String(err), 'bad');
+    } else {
+      setYoutubeConnectedUi(state.channel?.snippet?.title || 'Google access granted');
+      if (els.connection) setNotice(els.connection, `Connected, but setup needs attention: ${err?.message || err}`, 'bad');
+    }
+  } finally {
+    if (els.connect) {
+      els.connect.disabled = false;
+      if (!els.connect.classList.contains('hidden')) els.connect.textContent = 'Connect YouTube';
+    }
+    if (els.disconnect) els.disconnect.disabled = false;
   }
 }
 
 function disconnectYoutube() {
-  setTopYoutubeStatus('disconnected');
   const token = state.accessToken;
+
+  // Clear local state first so the UI always responds instantly.
   state.accessToken = '';
   state.expiresAt = 0;
   state.channel = null;
@@ -375,18 +451,24 @@ function disconnectYoutube() {
   state.analyticsByVideo.clear();
   state.playlists = [];
   renderPlaylistOptions();
-  if (token && window.google?.accounts?.oauth2?.revoke) {
-    try { google.accounts.oauth2.revoke(token, () => {}); } catch {}
-  }
-  els.connect.classList.remove('hidden');
-  els.disconnect.classList.add('hidden');
-  setNotice(els.connection, 'YouTube is not connected. Your saved Client ID remains on this device.', 'subtle');
-  setConnectedControls(false);
   resetMetrics();
-  els.snapshot.textContent = 'Connect YouTube to load your channel.';
-  els.plan.textContent = 'Your plan will be generated from your recent videos and analytics.';
-  els.audit.textContent = 'Connect YouTube to audit your videos.';
-  refreshUploadState();
+
+  if (els.snapshot) els.snapshot.textContent = 'Connect YouTube to load your channel.';
+  if (els.plan) els.plan.textContent = 'Your plan will be generated from your recent videos and analytics.';
+  if (els.audit) els.audit.textContent = 'Connect YouTube to audit your videos.';
+
+  setYoutubeDisconnectedUi('YouTube disconnected. Google access has been revoked for this browser session.');
+
+  // Revoke the Google token when one exists. UI does not wait for this network callback.
+  if (token && window.google?.accounts?.oauth2?.revoke) {
+    try {
+      google.accounts.oauth2.revoke(token, () => {
+        emitYoutubeState('disconnected', { revoked: true });
+      });
+    } catch (err) {
+      console.warn('Google token revoke callback failed:', err);
+    }
+  }
 }
 
 function setConnectedControls(enabled) {
@@ -402,28 +484,80 @@ els.buildPlan.addEventListener('click', renderGrowthPlan);
 
 async function refreshAllChannelData() {
   setNotice(els.connection, 'Loading channel, videos and analytics…');
+
+  // Core check: confirm the token can read the signed-in user's channel.
   const channelResponse = await apiJson(ytUrl('channels', {
     part: 'snippet,statistics,contentDetails,brandingSettings',
     mine: 'true',
   }));
   const channel = channelResponse.items?.[0];
-  if (!channel) throw new Error('No YouTube channel was found for this Google account.');
-  state.channel = channel;
+  if (!channel) throw new Error('Google access was granted, but no YouTube channel was found for this Google account.');
 
+  state.channel = channel;
+  setYoutubeConnectedUi(channel.snippet?.title || 'your YouTube channel');
+
+  const warnings = [];
   const uploadsId = channel.contentDetails?.relatedPlaylists?.uploads;
-  state.videos = uploadsId ? await fetchUploadVideos(uploadsId, 100) : [];
-  state.playlists = await fetchPlaylists().catch(err => { console.warn('Playlists unavailable', err); return []; });
+
+  if (uploadsId) {
+    try {
+      state.videos = await fetchUploadVideos(uploadsId, 100);
+    } catch (err) {
+      console.warn('Recent videos unavailable', err);
+      state.videos = [];
+      warnings.push('recent videos');
+    }
+  } else {
+    state.videos = [];
+  }
+
+  try {
+    state.playlists = await fetchPlaylists();
+  } catch (err) {
+    console.warn('Playlists unavailable', err);
+    state.playlists = [];
+    warnings.push('playlists');
+  }
   renderPlaylistOptions();
-  await fetchAnalytics().catch(err => {
+
+  try {
+    await fetchAnalytics();
+  } catch (err) {
     console.warn('Analytics unavailable', err);
     resetMetrics();
-  });
-  renderChannelSnapshot();
-  renderVideoAudit();
-  renderGrowthPlan();
-  if (els.autoTopic && !els.autoTopic.value.trim()) els.autoTopic.value = suggestAutoTopic();
+    warnings.push('analytics');
+  }
+
+  try { renderChannelSnapshot(); } catch (err) { console.warn('Channel snapshot render failed', err); }
+  try { renderVideoAudit(); } catch (err) { console.warn('Video audit render failed', err); }
+  try { renderGrowthPlan(); } catch (err) { console.warn('Growth plan render failed', err); }
+
+  if (els.autoTopic && !els.autoTopic.value.trim()) {
+    try { els.autoTopic.value = suggestAutoTopic(); } catch {}
+  }
+
   setConnectedControls(true);
-  setNotice(els.connection, `Connected to ${channel.snippet.title}. Loaded ${state.videos.length} recent videos.`, 'good');
+  setTopYoutubeStatus('connected', channel.snippet?.title || 'your YouTube channel');
+  emitYoutubeState('connected', {
+    channelTitle: channel.snippet?.title || '',
+    warnings
+  });
+
+  if (warnings.length) {
+    setNotice(
+      els.connection,
+      `Connected to ${channel.snippet.title}. Some optional data could not load: ${warnings.join(', ')}.`,
+      'good'
+    );
+  } else {
+    setNotice(
+      els.connection,
+      `Connected to ${channel.snippet.title}. Loaded ${state.videos.length} recent videos.`,
+      'good'
+    );
+  }
+
+  return channel;
 }
 
 async function fetchUploadVideos(playlistId, limit = 100) {
@@ -1300,11 +1434,14 @@ if (els.retryFailedUploads) els.retryFailedUploads.addEventListener('click', asy
 
 window.ClipFreeYouTube = {
   connectYoutube,
+  disconnectYoutube,
   refreshAllChannelData,
   autoOptimizeConnectedChannel,
   searchCommonsDownloadable,
   startFullAutoWithFile,
   uploadToYouTube,
+  isConnected: () => Boolean(state.accessToken && Date.now() < state.expiresAt),
+  getChannelTitle: () => state.channel?.snippet?.title || '',
 };
 
 loadSettings();
@@ -1331,3 +1468,10 @@ if (window.ClipFreeExport) {
   prefillUploadFromExport();
   refreshUploadState();
 }
+
+try {
+  window.dispatchEvent(new CustomEvent('clipfree-youtube-ready', {
+    detail: { demoRoute: OAUTH_DEMO_ROUTE }
+  }));
+} catch {}
+

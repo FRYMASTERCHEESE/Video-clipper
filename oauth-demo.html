@@ -44,6 +44,22 @@
       color:#ffd978;
       border-bottom:1px solid #735c20;
     }
+
+    #verification-demo, #youtube-growth, #upload, #setup { scroll-margin-top: 110px; }
+    .demo-state {
+      margin-top:14px;
+      padding:12px 14px;
+      border-radius:12px;
+      border:1px solid #353544;
+      background:#12121a;
+      color:#d8d8e2;
+      font-weight:700;
+      line-height:1.45;
+    }
+    .demo-state.good { border-color:#276b45; background:#10271b; color:#9ff2bf; }
+    .demo-state.warn { border-color:#735c20; background:#2a2110; color:#ffd978; }
+    .demo-state.bad { border-color:#7a3030; background:#2a1212; color:#ffb0b0; }
+
   </style>
 
 </head>
@@ -55,13 +71,8 @@
     <a class="brand" href="#">ClipFree <span>AI</span></a>
     <nav>
       <a href="#verification-demo">Demo</a>
-      <a href="#category-wizard">Categories</a>
-      <a href="#autopilot">Full Auto</a>
-      <a href="#animal-generator">Animal AI</a>
-      <a href="#studio">Clip Studio</a>
-      <a href="#youtube-growth">YouTube Growth</a>
-      <a href="#finder">Reusable Finder</a>
-      <a href="#donate">Donate ❤️</a>
+      <a href="#youtube-growth">Analytics</a>
+      <a href="#upload">Upload Tools</a>
       <a class="pill" href="#setup">Setup</a>
     </nav>
   </header>
@@ -96,11 +107,13 @@
 
           <div class="hero-actions" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
             <a class="secondary" href="privacy.html">1. Privacy Policy</a>
-            <button id="demoConnectYoutube" class="primary" type="button">2. Connect YouTube</button>
+            <button id="demoConnectYoutube" class="primary" type="button" disabled>2. Loading YouTube…</button>
             <a class="secondary" href="#youtube-growth">3. Analytics</a>
             <a class="secondary" href="#upload">4. Upload Tools</a>
-            <button id="demoDisconnectYoutube" class="secondary" type="button">5. Disconnect</button>
+            <button id="demoDisconnectYoutube" class="secondary" type="button" disabled>5. Disconnect</button>
           </div>
+
+          <div id="demoConnectionState" class="demo-state">Loading YouTube controls…</div>
 
           <div class="notice subtle" style="margin-top:14px">
             <strong>Fast recording order:</strong> Privacy → Connect → Google consent → Analytics → Upload Tools → Disconnect.
@@ -692,22 +705,104 @@
   <script type="module" src="category-pages.js"></script>
   <script>
     (() => {
-      const demoConnect = document.getElementById('demoConnectYoutube');
-      const demoDisconnect = document.getElementById('demoDisconnectYoutube');
+      const connectBtn = document.getElementById('demoConnectYoutube');
+      const disconnectBtn = document.getElementById('demoDisconnectYoutube');
+      const stateBox = document.getElementById('demoConnectionState');
 
-      demoConnect?.addEventListener('click', () => {
-        document.getElementById('connectYoutube')?.click();
+      function paint(status, detail = {}) {
+        if (!connectBtn || !disconnectBtn || !stateBox) return;
+
+        if (status === 'connected') {
+          const channel = detail.channelTitle ? ` — ${detail.channelTitle}` : '';
+          connectBtn.disabled = true;
+          connectBtn.textContent = '2. Connected ✓';
+          disconnectBtn.disabled = false;
+          stateBox.className = 'demo-state good';
+          stateBox.textContent = `✓ YouTube connected${channel}. Continue to 3. Analytics.`;
+          return;
+        }
+
+        if (status === 'connecting') {
+          connectBtn.disabled = true;
+          connectBtn.textContent = '2. Connecting…';
+          disconnectBtn.disabled = true;
+          stateBox.className = 'demo-state warn';
+          stateBox.textContent = 'Opening Google sign-in and waiting for authorization…';
+          return;
+        }
+
+        if (status === 'error') {
+          connectBtn.disabled = false;
+          connectBtn.textContent = '2. Connect YouTube';
+          disconnectBtn.disabled = true;
+          stateBox.className = 'demo-state bad';
+          stateBox.textContent = detail.message || 'Connection needs attention. Try Connect YouTube again.';
+          return;
+        }
+
+        connectBtn.disabled = false;
+        connectBtn.textContent = '2. Connect YouTube';
+        disconnectBtn.disabled = true;
+        stateBox.className = 'demo-state';
+        stateBox.textContent = '● YouTube not connected. Start with 1. Privacy Policy, then tap 2. Connect YouTube.';
+      }
+
+      async function waitForApi(timeout = 12000) {
+        const start = Date.now();
+        while (!window.ClipFreeYouTube) {
+          if (Date.now() - start > timeout) throw new Error('ClipFree YouTube controls did not finish loading. Refresh this page.');
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return window.ClipFreeYouTube;
+      }
+
+      connectBtn?.addEventListener('click', async () => {
+        try {
+          const api = await waitForApi();
+          await api.connectYoutube();
+        } catch (err) {
+          paint('error', { message: err?.message || String(err) });
+        }
       });
 
-      demoDisconnect?.addEventListener('click', () => {
-        document.getElementById('disconnectYoutube')?.click();
+      disconnectBtn?.addEventListener('click', async () => {
+        try {
+          const api = await waitForApi();
+          api.disconnectYoutube();
+          paint('disconnected');
+          setTimeout(() => document.getElementById('verification-demo')?.scrollIntoView({ behavior:'smooth', block:'start' }), 150);
+        } catch (err) {
+          paint('error', { message: err?.message || String(err) });
+        }
       });
+
+      window.addEventListener('clipfree-youtube-state', (event) => {
+        paint(event.detail?.status || 'disconnected', event.detail || {});
+      });
+
+      window.addEventListener('clipfree-youtube-ready', async () => {
+        try {
+          const api = await waitForApi();
+          if (api.isConnected?.()) {
+            paint('connected', { channelTitle: api.getChannelTitle?.() || '' });
+          } else {
+            paint('disconnected');
+          }
+        } catch (err) {
+          paint('error', { message: err?.message || String(err) });
+        }
+      });
+
+      // Fallback in case the module became ready before this listener attached.
+      waitForApi().then(api => {
+        if (api.isConnected?.()) paint('connected', { channelTitle: api.getChannelTitle?.() || '' });
+        else paint('disconnected');
+      }).catch(err => paint('error', { message: err?.message || String(err) }));
     })();
   </script>
-
-  <script>
+<script>
     window.addEventListener('load', () => {
-      setTimeout(() => document.getElementById('verification-demo')?.scrollIntoView({block:'start'}), 250);
+      setTimeout(() => document.getElementById('verification-demo')?.scrollIntoView({block:'start'}), 450);
     });
   </script>
 

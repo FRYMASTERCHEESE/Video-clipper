@@ -1,34 +1,31 @@
-CLIPFREE AI — PRIVATE GOOGLE OAUTH TEST ROUTE
+CLIPFREE AI — OAUTH DEMO BUGFIX
 
-UPLOAD THESE 3 FILES TO THE ROOT OF:
-FRYMASTERCHEESE/Video-clipper
+Replace ONLY these two files in FRYMASTERCHEESE/Video-clipper:
+1. youtube.js
+2. oauth-demo.html
 
-1. index.html
-   Replace the existing public index.html.
-   This removes the Demo link/panel from the public homepage.
+Do NOT replace index.html or your other ClipFree files.
 
-2. youtube.js
-   Replace the existing youtube.js.
-   While verification is pending, Google OAuth token requests are blocked on the public homepage.
-   OAuth remains enabled on oauth-demo.html.
+WHAT THIS FIXES
+- OAuth success no longer gets falsely changed back to "not connected" just because analytics/videos/playlists had a loading problem.
+- Top status changes immediately after Google grants access.
+- Connected state hides the real Connect button and shows Disconnect.
+- Disconnect updates the UI immediately and revokes the token in the background.
+- Demo Connect/Disconnect buttons call the real ClipFree functions directly instead of clicking hidden DOM buttons.
+- Demo buttons wait until youtube.js is fully loaded.
+- Optional API failures no longer break the entire connection.
+- Analytics/video/playlist loading is isolated so one failure does not destroy the session.
+- Demo page shows a clear connection-state box.
+- Demo nav is simplified for faster recording.
+- Anchor targets have mobile scroll spacing so sticky headers do not cover sections.
 
-3. oauth-demo.html
-   ADD this as a NEW file.
-   Do not rename it.
+EXPECTED DEMO FLOW
+1 Privacy Policy
+2 Connect YouTube
+Top bar should change: Connecting → Connected — <channel>
+3 Analytics
+4 Upload Tools
+5 Disconnect
+Top bar should return to YouTube not connected
 
-PRIVATE TEST URL AFTER GITHUB PAGES UPDATES:
-https://frymastercheese.github.io/Video-clipper/oauth-demo.html
-
-WHAT THE PRIVATE ROUTE DOES
-- noindex / nofollow / noarchive
-- not linked from the public ClipFree homepage
-- hides unrelated sections during the recording
-- keeps the real Privacy, OAuth, Analytics, Upload and Disconnect features
-- uses the same real ClipFree code and OAuth scopes
-- top status changes from not connected → connecting → connected
-
-RECORDING ORDER
-Privacy Policy → Connect YouTube → Google warning/consent → Analytics → Upload Tools → Disconnect
-
-AFTER GOOGLE APPROVES OAUTH
-The temporary public-route OAuth block should be removed so normal users can connect from the public site again.
+If Google OAuth itself returns an error, the page will show the actual error instead of pretending the user is disconnected after a successful authorization.
