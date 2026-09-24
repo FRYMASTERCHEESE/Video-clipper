@@ -420,12 +420,22 @@
         <div>
           <div class="badge">YOUTUBE GROWTH DASHBOARD</div>
           <h2>Use your real channel data, not guesses.</h2>
-          <p>Connect your own YouTube channel to review views, estimated watch hours, subscriber gains, top videos and metadata opportunities.</p>
+          <p>Connect your own YouTube channel to review views, estimated watch time, subscriber gains, top videos and metadata opportunities.</p>
         </div>
         <div class="connect-actions">
+          <a href="#upload" aria-label="Go to ClipFree's YouTube upload tools" style="display:inline-flex;align-items:center;justify-content:center;background:#111;border-radius:10px;padding:8px 12px;text-decoration:none">
+            <img src="https://developers.google.com/static/youtube/images/developed-with-youtube-sentence-case-light.png" alt="Developed with YouTube" style="display:block;width:180px;max-width:42vw;height:auto" />
+          </a>
           <button id="connectYoutube" class="primary">Connect YouTube</button>
           <button id="disconnectYoutube" class="secondary hidden">Disconnect</button>
         </div>
+      </div>
+
+      <div class="notice subtle" style="margin-bottom:12px">
+        <strong>Before you connect:</strong> ClipFree AI requests only the Google/YouTube permissions used by the features shown on this page: permission to view and manage your YouTube videos, captions, playlists and channel data needed for creator/upload tools, plus read-only access to your YouTube Analytics reports. ClipFree uses this data only to provide the features you choose in this browser. It does not sell Google user data, use it for advertising, or use it to train AI models. Google shows its own consent screen before access is granted. You can disconnect and revoke access at any time. <a href="privacy.html">Read the Privacy Policy</a>.
+      </div>
+      <div class="notice subtle" style="margin-bottom:12px">
+        <strong>OAuth scopes used:</strong> <code>youtube.force-ssl</code> for YouTube creator/upload/channel actions and <code>yt-analytics.readonly</code> for the analytics dashboard. ClipFree AI is an independent application and is not endorsed by YouTube.
       </div>
 
       <div id="youtubeConnectionStatus" class="notice">YouTube is not connected yet. Add your Google OAuth Client ID in Setup, then connect.</div>
@@ -553,6 +563,9 @@
               <strong>YouTube API compliance:</strong> For API uploads to be eligible for Public visibility, YouTube requires newer unverified API projects to pass a compliance audit. Use the official
               <a href="https://support.google.com/youtube/contact/yt_api_form" target="_blank" rel="noopener">YouTube Data API audit form</a>.
               Keep <a href="privacy.html">Privacy Policy</a>, <a href="terms.html">Terms</a>, and the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms</a> available for review.
+            </div>
+            <div class="notice subtle">
+              <strong>Google OAuth verification disclosure:</strong> ClipFree requests <code>youtube.force-ssl</code> because its visible creator tools can upload videos/captions/thumbnails, manage playlists and perform channel actions you initiate, and <code>yt-analytics.readonly</code> because the visible analytics dashboard reads your YouTube Analytics reports. Access tokens stay in page memory for the active session; the static GitHub Pages build does not operate a server database that stores your token or channel analytics.
             </div>
           </div>
         </section>

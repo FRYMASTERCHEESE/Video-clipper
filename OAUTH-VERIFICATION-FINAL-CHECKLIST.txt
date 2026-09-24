@@ -1,0 +1,90 @@
+CLIPFREE AI — GOOGLE OAUTH VERIFICATION FINAL CHECKLIST
+Updated: 24 September 2026
+
+UPLOAD THESE 3 FILES TO YOUR GITHUB REPO ROOT:
+1. index.html   — replace existing
+2. privacy.html — replace existing
+3. youtube.js   — replace existing
+
+DO NOT DELETE any of your other files.
+
+WHAT THIS UPDATE FIXES
+- Adds a prominent Google/YouTube user-data disclosure immediately before Connect YouTube.
+- Adds official YouTube API branding next to the YouTube integration.
+- Explains exactly why the two OAuth scopes are used.
+- Removes the redundant youtube.readonly scope from the production code.
+- Keeps only:
+  https://www.googleapis.com/auth/youtube.force-ssl
+  https://www.googleapis.com/auth/yt-analytics.readonly
+- Adds Google's recommended Limited Use statement to the Privacy Policy.
+- Explicitly states that Google user data is not sold, used for ads, or used to train AI models.
+- Keeps access tokens in page memory and explains the browser-only data handling.
+- Keeps English upload metadata language.
+
+GOOGLE CLOUD — DO THESE BEFORE SUBMITTING
+A. Data Access
+Open:
+https://console.cloud.google.com/auth/scopes?project=bebo-472207
+
+Click Add or remove scopes.
+KEEP ONLY the scopes ClipFree actually requests:
+- https://www.googleapis.com/auth/youtube.force-ssl
+- https://www.googleapis.com/auth/yt-analytics.readonly
+
+REMOVE youtube.readonly if it is still selected.
+Save the Data Access page.
+
+B. Search Console domain ownership
+Open:
+https://search.google.com/search-console
+
+The same Google account that is an Owner or Editor of the Google Cloud project must be
+a VERIFIED OWNER of the authorized domain/property used by ClipFree.
+Google will not approve OAuth verification until domain ownership is verified.
+
+C. OAuth demo video
+Record the ACTUAL LIVE ClipFree site and ACTUAL Google OAuth flow.
+The video must show:
+1. ClipFree AI homepage and its purpose.
+2. The Privacy Policy link.
+3. The prominent "Before you connect" disclosure.
+4. Tap Connect YouTube.
+5. Full Google OAuth consent screen in ENGLISH.
+6. Show the permissions/scopes being requested.
+7. Complete consent.
+8. Show the connected YouTube channel dashboard.
+9. Show Analytics dashboard use (yt-analytics.readonly).
+10. Show a creator/upload feature that needs youtube.force-ssl:
+    upload form, playlist/caption/thumbnail flow, or another visible creator action.
+11. Show Disconnect YouTube / revocation option.
+
+Use an accessible YouTube (Unlisted is fine) or Google Drive link when Google asks for the demo.
+
+D. Scope justification text
+youtube.force-ssl:
+"ClipFree AI is a browser-based creator workflow. This scope is required for the visible
+YouTube creator features that users explicitly initiate, including uploading videos,
+captions and thumbnails, reading/managing playlists, and channel/video actions. ClipFree
+does not perform hidden background actions and users can disconnect/revoke access."
+
+yt-analytics.readonly:
+"ClipFree AI uses this read-only scope to display the authenticated creator's own YouTube
+Analytics reports in the visible Growth Dashboard, including views, watch-time metrics,
+average view duration and subscriber movement. The data is used only for user-facing
+creator analytics and is not sold, used for advertising or used to train AI models."
+
+E. Verification Center
+Open:
+https://console.cloud.google.com/auth/verification?project=bebo-472207
+
+Only submit after:
+- the 3 website files above are live,
+- Data Access matches the 2 production scopes,
+- domain ownership is verified in Search Console,
+- your demo video is ready.
+
+IMPORTANT
+Google verification and the YouTube API compliance audit are separate reviews.
+OAuth verification removes the Google "unverified app" warning after approval.
+The YouTube API compliance audit addresses YouTube API project compliance/restrictions,
+including the forced-Private upload restriction that can apply to unverified API projects.

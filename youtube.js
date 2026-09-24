@@ -20,8 +20,10 @@ const els = {
 
 const STORAGE_KEY = 'clipfree_youtube_settings_v2';
 const SCOPES = [
+  // Minimum scopes used by the current production features:
+  // - youtube.force-ssl: channel/video/playlist/caption/thumbnail creator actions
+  // - yt-analytics.readonly: visible channel analytics dashboard
   'https://www.googleapis.com/auth/youtube.force-ssl',
-  'https://www.googleapis.com/auth/youtube.readonly',
   'https://www.googleapis.com/auth/yt-analytics.readonly',
 ].join(' ');
 
@@ -1121,7 +1123,7 @@ async function uploadToYouTube(options = {}) {
   try {
     const token = await ensureToken();
     const metadata = {
-      snippet: { title: title.slice(0,100), description, categoryId: els.uploadCategory.value },
+      snippet: { title: title.slice(0,100), description, categoryId: els.uploadCategory.value, defaultLanguage: 'en' },
       status: { privacyStatus: els.uploadPrivacy.value, selfDeclaredMadeForKids: els.uploadMadeForKids.value === 'true' },
     };
     if (tags.length) metadata.snippet.tags = tags;
