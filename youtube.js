@@ -250,7 +250,17 @@ async function waitForGoogle(timeout = 10000) {
   }
 }
 
+
+const OAUTH_DEMO_ROUTE = /\/oauth-demo\.html$/i.test(window.location.pathname);
+
+function requireOAuthDemoRoute() {
+  if (!OAUTH_DEMO_ROUTE) {
+    throw new Error('YouTube connection is temporarily available only on ClipFree AI\'s private Google OAuth verification test route while verification is pending.');
+  }
+}
+
 async function requestAccessToken() {
+  requireOAuthDemoRoute();
   if (!state.settings.clientId) throw new Error('Add your Google OAuth Client ID in Setup first.');
   await waitForGoogle();
   return new Promise((resolve, reject) => {
@@ -296,17 +306,58 @@ function ytUrl(path, params = {}) {
   return u.toString();
 }
 
+function setTopYoutubeStatus(status = 'disconnected', channelTitle = '') {
+  const banner = $('topYoutubeConnection');
+  if (!banner) return;
+
+  if (status === 'verification') {
+    banner.textContent = '● YouTube OAuth verification in progress';
+    banner.style.background = '#1b1630';
+    banner.style.color = '#cbbcff';
+    banner.style.borderColor = '#4f3f78';
+    return;
+  }
+
+  if (status === 'connecting') {
+    banner.textContent = '● Connecting to YouTube…';
+    banner.style.background = '#2a2110';
+    banner.style.color = '#ffd978';
+    banner.style.borderColor = '#735c20';
+    return;
+  }
+
+  if (status === 'connected') {
+    const channel = String(channelTitle || '').trim();
+    banner.textContent = channel ? `✓ YouTube connected — ${channel}` : '✓ YouTube connected';
+    banner.style.background = '#10271b';
+    banner.style.color = '#8ff0b5';
+    banner.style.borderColor = '#276b45';
+    return;
+  }
+
+  banner.textContent = '● YouTube not connected';
+  banner.style.background = '#17171f';
+  banner.style.color = '#d0d0da';
+  banner.style.borderColor = '#272735';
+}
+
 async function connectYoutube() {
   try {
+    setTopYoutubeStatus('connecting');
     els.connect.disabled = true;
     els.connect.innerHTML = '<span class="spinner"></span>Connecting';
     setNotice(els.connection, 'Opening Google sign-in…');
     await requestAccessToken();
     await refreshAllChannelData();
+    els.connect.classList.add('hidden');
     els.disconnect.classList.remove('hidden');
+    setTopYoutubeStatus('connected', state.channel?.snippet?.title || 'your YouTube channel');
     setNotice(els.connection, `Connected to ${state.channel?.snippet?.title || 'your YouTube channel'}.`, 'good');
   } catch (err) {
     console.error(err);
+    els.connect.classList.remove('hidden');
+    els.disconnect.classList.add('hidden');
+    setTopYoutubeStatus('disconnected');
     setNotice(els.connection, err.message || String(err), 'bad');
   } finally {
     els.connect.disabled = false;
@@ -315,6 +366,7 @@ async function connectYoutube() {
 }
 
 function disconnectYoutube() {
+  setTopYoutubeStatus('disconnected');
   const token = state.accessToken;
   state.accessToken = '';
   state.expiresAt = 0;
@@ -326,6 +378,7 @@ function disconnectYoutube() {
   if (token && window.google?.accounts?.oauth2?.revoke) {
     try { google.accounts.oauth2.revoke(token, () => {}); } catch {}
   }
+  els.connect.classList.remove('hidden');
   els.disconnect.classList.add('hidden');
   setNotice(els.connection, 'YouTube is not connected. Your saved Client ID remains on this device.', 'subtle');
   setConnectedControls(false);
@@ -1255,6 +1308,21 @@ window.ClipFreeYouTube = {
 };
 
 loadSettings();
+if (OAUTH_DEMO_ROUTE) {
+  setTopYoutubeStatus('disconnected');
+} else {
+  setTopYoutubeStatus('verification');
+  if (els.connect) {
+    els.connect.disabled = true;
+    els.connect.textContent = 'OAuth verification in progress';
+  }
+  if (els.disconnect) els.disconnect.classList.add('hidden');
+  setNotice(
+    els.connection,
+    'Google/YouTube connection is temporarily limited while ClipFree AI completes OAuth verification. The rest of ClipFree remains available.',
+    'subtle'
+  );
+}
 refreshFinderAvailability();
 refreshUploadState();
 if (window.ClipFreeExport) {
