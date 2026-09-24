@@ -1,0 +1,10 @@
+Replace ONLY these two files in FRYMASTERCHEESE/Video-clipper:
+1) index.html
+2) youtube.js
+
+After GitHub Pages refreshes, the top of ClipFree will show:
+• YouTube not connected (neutral)
+• Connecting to YouTube… (yellow)
+• YouTube connected — <channel name> (green)
+
+The existing Google Verification Demo panel stays in place.
