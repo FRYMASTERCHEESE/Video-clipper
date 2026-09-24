@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b0b10" />
+  <title>ClipFree AI — Video Clipper + YouTube Growth Suite</title>
+  <meta name="description" content="Automatic browser-based AI clipping, YouTube SEO, channel analytics, Creative Commons discovery and YouTube uploads. No watermark added by the app." />
+  <meta name="keywords" content="AI video clipper, YouTube Shorts, YouTube SEO, channel analytics, Creative Commons video finder, no watermark video clipper" />
+  <meta name="robots" content="index,follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="ClipFree AI — Video Clipper + YouTube Growth Suite" />
+  <meta property="og:description" content="Clip videos, build YouTube metadata, review channel performance and upload from one browser-based tool." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebApplication",
+    "name":"ClipFree AI",
+    "applicationCategory":"MultimediaApplication",
+    "operatingSystem":"Any modern web browser",
+    "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},
+    "description":"Browser-based AI-assisted video clipping, YouTube metadata generation, analytics and channel workflow tools."
+  }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#">ClipFree <span>AI</span></a>
+    <nav>
+      <a href="#verification-demo">Demo</a>
+      <a href="#category-wizard">Categories</a>
+      <a href="#autopilot">Full Auto</a>
+      <a href="#animal-generator">Animal AI</a>
+      <a href="#studio">Clip Studio</a>
+      <a href="#youtube-growth">YouTube Growth</a>
+      <a href="#finder">Reusable Finder</a>
+      <a href="#donate">Donate ❤️</a>
+      <a class="pill" href="#setup">Setup</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="badge">AUTO CLIPPING • YOUTUBE SEO • CHANNEL ANALYTICS • NO WATERMARK</div>
+      <h1>Turn one video into <span>a complete YouTube workflow.</span></h1>
+      <p class="lead">ClipFree AI can transcribe videos, find strong moments, export Shorts, generate YouTube metadata, review your channel analytics, find Creative Commons source videos and upload finished clips after you connect your own YouTube account.</p>
+      <div class="hero-actions">
+        <a class="primary" href="#autopilot">Start FULL AUTO</a>
+        <a class="secondary" href="#animal-generator">Create animal Short</a>
+        <button class="secondary donate-action" type="button">Donate to charity ❤️</button>
+      </div>
+      <div class="trust-row">
+        <span>✓ Runs in your browser</span><span>✓ No watermark added</span><span>✓ No paid AI API required</span><span>✓ Official YouTube APIs</span><span>✓ You stay in control of publishing</span>
+      </div>
+    </section>
+
+
+    <section id="verification-demo" class="growth-shell" style="padding-top:18px;padding-bottom:18px">
+      <section class="growth-card wide-card" style="border:1px solid rgba(139,92,246,.55)">
+        <div class="card-body">
+          <div class="badge">GOOGLE VERIFICATION DEMO • QUICK ACCESS</div>
+          <h2 style="margin-bottom:8px">Everything for the OAuth demo is together here.</h2>
+          <p class="subcopy" style="margin-bottom:14px">Use these buttons while screen-recording. They use ClipFree's existing YouTube controls and do not change the OAuth permissions.</p>
+
+          <div class="hero-actions" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+            <a class="secondary" href="privacy.html" target="_blank" rel="noopener">1. Privacy Policy</a>
+            <button id="demoConnectYoutube" class="primary" type="button">2. Connect YouTube</button>
+            <a class="secondary" href="#youtube-growth">3. Analytics</a>
+            <a class="secondary" href="#upload">4. Upload Tools</a>
+            <button id="demoDisconnectYoutube" class="secondary" type="button">5. Disconnect</button>
+          </div>
+
+          <div class="notice subtle" style="margin-top:14px">
+            <strong>Fast recording order:</strong> Privacy → Connect → Google consent → Analytics → Upload Tools → Disconnect.
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="category-wizard" class="growth-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">CATEGORY PAGES • STEP BY STEP</div>
+          <h2>Choose a category, then tap Next.</h2>
+          <p>This quick setup fills the existing FULL AUTO and Animal AI controls for you. Use Back and Next like separate pages, then start the workflow from the final page.</p>
+        </div>
+      </div>
+
+      <section class="growth-card category-wizard-card">
+        <div class="card-body">
+          <div class="category-wizard-progress" aria-label="Setup progress">
+            <span data-wizard-dot="0" class="active">1</span>
+            <span data-wizard-dot="1">2</span>
+            <span data-wizard-dot="2">3</span>
+            <span data-wizard-dot="3">4</span>
+          </div>
+
+          <div class="category-wizard-page active" data-wizard-page="0">
+            <h3>Page 1 — Choose your category</h3>
+            <p class="subcopy">Pick the type of Shorts you want ClipFree to create automatically.</p>
+            <div class="category-choice-grid">
+              <button type="button" class="category-choice" data-category="lions" data-topic="lion wildlife">🦁 <strong>Lions</strong><span>Big-cat wildlife</span></button>
+              <button type="button" class="category-choice" data-category="wildlife" data-topic="wild animals wildlife nature">🌍 <strong>Wildlife</strong><span>Mixed wild animals</span></button>
+              <button type="button" class="category-choice" data-category="kittens" data-topic="cute kitten cat playing">🐱 <strong>Kittens</strong><span>Cute cat Shorts</span></button>
+              <button type="button" class="category-choice" data-category="puppies" data-topic="cute puppy dog playing">🐶 <strong>Puppies</strong><span>Cute dog Shorts</span></button>
+              <button type="button" class="category-choice" data-category="tigers" data-topic="tiger wildlife">🐅 <strong>Tigers</strong><span>Wild big cats</span></button>
+              <button type="button" class="category-choice" data-category="elephants" data-topic="elephant wildlife">🐘 <strong>Elephants</strong><span>Safari wildlife</span></button>
+              <button type="button" class="category-choice" data-category="wolves" data-topic="wolf wildlife">🐺 <strong>Wolves</strong><span>Predator wildlife</span></button>
+              <button type="button" class="category-choice" data-category="bears" data-topic="bear wildlife">🐻 <strong>Bears</strong><span>Wildlife moments</span></button>
+            </div>
+          </div>
+
+          <div class="category-wizard-page" data-wizard-page="1">
+            <h3>Page 2 — Choose the style</h3>
+            <p class="subcopy">This controls the story tone and title style. FULL AUTO still checks the actual source before making action claims.</p>
+            <div class="category-choice-grid style-grid">
+              <button type="button" class="category-choice" data-style="documentary">🎬 <strong>Documentary</strong><span>Clear facts and wildlife context</span></button>
+              <button type="button" class="category-choice" data-style="dramatic">⚡ <strong>Dramatic</strong><span>Stronger hooks and action</span></button>
+              <button type="button" class="category-choice" data-style="cute">❤️ <strong>Cute</strong><span>Warm, friendly packaging</span></button>
+              <button type="button" class="category-choice" data-style="calm">🌿 <strong>Calm</strong><span>Relaxed nature tone</span></button>
+            </div>
+          </div>
+
+          <div class="category-wizard-page" data-wizard-page="2">
+            <h3>Page 3 — Batch and publishing</h3>
+            <div class="form-grid category-wizard-form">
+              <label><span>How many Shorts?</span>
+                <select id="wizardBatchCount">
+                  <option value="1">1 Short</option><option value="2">2 Shorts</option><option value="3" selected>3 Shorts</option>
+                  <option value="4">4 Shorts</option><option value="5">5 Shorts</option><option value="6">6 Shorts</option>
+                  <option value="7">7 Shorts</option><option value="8">8 Shorts</option>
+                </select>
+              </label>
+              <label><span>Visibility</span>
+                <select id="wizardPrivacy">
+                  <option value="private" selected>Private — safest until API audit passes</option>
+                  <option value="unlisted">Unlisted</option>
+                  <option value="public">Public — use after YouTube approval</option>
+                </select>
+              </label>
+              <label><span>Audience strategy</span>
+                <select id="wizardAudience">
+                  <option value="premium-en" selected>International English — US, Canada, UK, Australia, NZ</option>
+                </select>
+              </label>
+            </div>
+            <div class="notice subtle">The app can optimize packaging for these English-speaking markets, but YouTube decides which viewers receive each Short.</div>
+          </div>
+
+          <div class="category-wizard-page" data-wizard-page="3">
+            <h3>Page 4 — Ready</h3>
+            <div id="wizardSummary" class="notice good">Choose a category and style to finish setup.</div>
+            <div class="wizard-final-actions">
+              <button id="wizardStartAnimal" type="button" class="primary">Open Animal AI setup</button>
+              <button id="wizardStartAuto" type="button" class="secondary">Open FULL AUTO setup</button>
+            </div>
+            <p class="subcopy">Your category, topic, style, batch size and visibility are copied into the existing ClipFree controls automatically.</p>
+          </div>
+
+          <div class="category-wizard-nav">
+            <button id="wizardBack" type="button" class="secondary" disabled>← Back</button>
+            <span id="wizardPageLabel">Page 1 of 4</span>
+            <button id="wizardNext" type="button" class="primary">Next →</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="autopilot" class="growth-shell autopilot-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">FULL AUTO • FREE VIDEO FINDER • YOUTUBE UPLOAD</div>
+          <h2>Pick a source once. ClipFree handles the rest.</h2>
+          <p>Use your own video or let ClipFree search Wikimedia Commons for downloadable, openly licensed video. After a source is chosen it can automatically transcribe, find the strongest moment, crop to 9:16, create captions and a thumbnail, generate YouTube SEO and attribution, upload to YouTube, and add the upload to a Shorts playlist.</p>
+        </div>
+      </div>
+
+      <div class="autopilot-grid">
+        <section class="growth-card autopilot-card">
+          <div class="card-body form-grid">
+            <h3>Option 1 — Find a free video automatically</h3>
+            <label><span>Topic</span><input id="autoTopic" type="search" placeholder="e.g. lions, wildlife, animal rescue" /></label>
+            <label><span>How many vertical Shorts?</span>
+              <select id="autoBatchCount">
+                <option value="1" selected>1 Short</option><option value="2">2 Shorts</option><option value="3">3 Shorts</option><option value="4">4 Shorts</option>
+                <option value="5">5 Shorts</option><option value="6">6 Shorts</option><option value="7">7 Shorts</option><option value="8">8 Shorts</option>
+              </select>
+            </label>
+            <label><span>FULL AUTO visibility</span>
+              <select id="autoPrivacy">
+                <option value="private" selected>Private — use until YouTube API audit passes</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="public">Public — use after YouTube approves the API project</option>
+              </select>
+            </label>
+            <label class="checkline"><input id="autoUploadCertification" type="checkbox" /> I confirm I have the rights to upload this content and it complies with the <a href="https://www.youtube.com/howyoutubeworks/policies/community-guidelines/" target="_blank" rel="noopener">YouTube Community Guidelines</a>.</label>
+            <button id="autoFindCreateUpload" class="primary">Find free videos → create → upload batch</button>
+            <div id="autoFinderStatus" class="notice subtle">Uses Wikimedia Commons videos with straightforward reuse licences such as Public Domain, CC0 or CC BY. ClipFree keeps source/licence attribution with the upload.</div>
+          </div>
+        </section>
+
+        <section class="growth-card autopilot-card">
+          <div class="card-body form-grid">
+            <h3>Option 2 — Use your own video</h3>
+            <label class="upload-box compact-upload" for="autoLocalFile">
+              <input id="autoLocalFile" type="file" accept="video/*" multiple />
+              <strong id="autoLocalFileLabel">Choose 1–8 videos</strong>
+              <span>ClipFree processes and uploads them one at a time so your phone uses less memory.</span>
+            </label>
+            <button id="autoStartLocal" class="primary" disabled>Auto create + upload selected videos</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="growth-card wide-card autopilot-progress-card">
+        <div class="card-body">
+          <div class="status-line"><span>FULL AUTO status</span><strong id="autoStatusText">Ready</strong></div>
+          <div class="progress"><div id="autoProgressBar"></div></div>
+          <div id="autoStatusDetail" class="notice subtle">Connect YouTube once, then choose a source. For new/unverified YouTube API projects, Google may force automatic uploads to Private until the project passes its audit.</div>
+        </div>
+      </section>
+
+      <section class="growth-card wide-card">
+        <div class="panel-head">
+          <div><h3>Reliable upload queue</h3><p class="subcopy">Each Short is tracked separately. Retryable YouTube server errors are retried automatically up to 3 times. Failed items remain visible instead of disappearing.</p></div>
+          <button id="retryFailedUploads" class="secondary small-btn" type="button">Retry failed</button>
+        </div>
+        <div id="uploadQueue" class="card-body muted">No FULL AUTO jobs yet.</div>
+      </section>
+
+      <section class="growth-card wide-card">
+        <div class="panel-head"><div><h3>Free downloadable video results</h3><p class="subcopy">These results come from Wikimedia Commons, not YouTube ripping. FULL AUTO filters for Public Domain, CC0 or attribution-only CC BY sources and keeps the source/licence credit in the YouTube description.</p></div></div>
+        <div id="commonsResults" class="video-result-grid card-body"></div>
+      </section>
+    </section>
+
+
+
+    <section id="animal-generator" class="growth-shell animal-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">FREE AI-ASSISTED ANIMAL SHORTS GENERATOR</div>
+          <h2>Lions, wildlife, kittens and puppies — up to 8 at once.</h2>
+          <p>ClipFree finds multiple reusable animal clips from Wikimedia Commons, builds fresh vertical 9:16 montages in your browser, adds open-licensed real animal sounds when available, creates story captions and stronger thumbnails, then sends every Short through SEO, attribution, upload and Shorts-playlist automation.</p>
+        </div>
+      </div>
+
+      <div class="animal-preset-row" role="group" aria-label="Animal presets">
+        <button class="animal-preset active" data-animal-preset="lions" type="button">🦁 Lions</button>
+        <button class="animal-preset" data-animal-preset="wildlife" type="button">🦒 Wild animals</button>
+        <button class="animal-preset" data-animal-preset="kittens" type="button">🐱 Cute kittens</button>
+        <button class="animal-preset" data-animal-preset="puppies" type="button">🐶 Cute puppies</button>
+      </div>
+
+      <div class="autopilot-grid">
+        <section class="growth-card">
+          <div class="card-body form-grid">
+            <h3>Animal video idea</h3>
+            <label><span>Custom topic <em>(optional)</em></span><input id="animalTopic" placeholder="e.g. lion cubs playing, funny kittens, safari animals" /></label>
+            <label><span>Style</span>
+              <select id="animalStyle">
+                <option value="documentary" selected>Wildlife documentary</option>
+                <option value="cute">Cute & wholesome</option>
+                <option value="dramatic">Dramatic / epic</option>
+                <option value="calm">Calm / relaxing</option>
+              </select>
+            </label>
+            <label><span>Target length</span>
+              <select id="animalDuration">
+                <option value="15">About 15 seconds</option>
+                <option value="24" selected>About 24 seconds</option>
+                <option value="30">About 30 seconds</option>
+              </select>
+            </label>
+            <label><span>How many Shorts in this batch?</span>
+              <select id="animalBatchCount">
+                <option value="1" selected>1 Short</option><option value="2">2 Shorts</option><option value="3">3 Shorts</option><option value="4">4 Shorts</option>
+                <option value="5">5 Shorts</option><option value="6">6 Shorts</option><option value="7">7 Shorts</option><option value="8">8 Shorts</option>
+              </select>
+            </label>
+            <label class="checkline"><input id="animalSounds" type="checkbox" checked /> Add real open-licensed animal sounds automatically when a suitable recording is available</label>
+            <button id="generateAnimalVideo" class="primary big-auto-button" type="button">✨ Generate + upload animal Shorts</button>
+            <div id="animalGeneratorStatus" class="notice subtle">Choose 1–8. ClipFree creates each vertical 9:16 Short one at a time, adds SEO, story captions, thumbnail, attribution and real animal audio when available, then uploads automatically.</div>
+            <div class="progress"><div id="animalGeneratorProgress"></div></div>
+          </div>
+        </section>
+
+        <section class="growth-card">
+          <div class="panel-head"><div><h3>Sources used</h3><p class="subcopy">ClipFree only uses results whose metadata indicates a straightforward reuse licence. Always keep the generated attribution in the description.</p></div></div>
+          <div id="animalSourceResults" class="animal-source-list card-body muted">Press Generate to find suitable sources.</div>
+        </section>
+      </div>
+    </section>
+
+    <section id="studio" class="studio-shell">
+      <aside class="sidebar">
+        <h2>Automatic Clip Studio</h2>
+        <p>Choose a video. With Auto Mode enabled, the site handles transcription, highlight selection, SEO and export.</p>
+
+        <label class="upload-box" for="videoInput">
+          <input id="videoInput" type="file" accept="video/*" />
+          <strong>Choose a video</strong>
+          <span>MP4, MOV, WebM and most browser-readable formats</span>
+        </label>
+
+        <label class="toggle-card">
+          <span>
+            <strong>Auto Mode</strong>
+            <small>Analyze → best highlight → YouTube SEO → export</small>
+          </span>
+          <input id="autoMode" type="checkbox" checked />
+        </label>
+
+        <label class="toggle-card compact-toggle">
+          <span>
+            <strong>Auto-export best clip</strong>
+            <small>Automatically renders the top-ranked clip</small>
+          </span>
+          <input id="autoExport" type="checkbox" checked />
+        </label>
+
+        <div class="control-group">
+          <label for="ratio">Output format</label>
+          <select id="ratio">
+            <option value="9:16" selected>9:16 — YouTube Shorts / Reels / TikTok</option>
+            <option value="1:1">1:1 — Square</option>
+            <option value="16:9">16:9 — YouTube / Landscape</option>
+            <option value="original">Original</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="clipLength">Automatic clip length</label>
+          <select id="clipLength">
+            <option value="30">Around 30 seconds</option>
+            <option value="45" selected>Around 45 seconds</option>
+            <option value="60">Up to 60 seconds</option>
+          </select>
+        </div>
+
+        <div class="control-group inline-two">
+          <div>
+            <label for="startTime">Start (sec)</label>
+            <input id="startTime" type="number" min="0" step="0.1" value="0" />
+          </div>
+          <div>
+            <label for="endTime">End (sec)</label>
+            <input id="endTime" type="number" min="0" step="0.1" value="30" />
+          </div>
+        </div>
+
+        <button id="aiButton" class="primary full" disabled>Run automatic AI</button>
+        <button id="exportButton" class="secondary full" disabled>Export selected clip</button>
+
+        <div class="status-card">
+          <div class="status-line"><span>Status</span><strong id="statusText">Waiting for a video</strong></div>
+          <div class="progress"><div id="progressBar"></div></div>
+          <small id="statusHint">First use may download the free AI model and video engine.</small>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <div class="video-card">
+          <video id="preview" controls playsinline></video>
+          <div id="emptyPreview" class="empty-preview">
+            <div class="play-icon">▶</div>
+            <h3>Your video preview will appear here</h3>
+            <p>Auto Mode starts after the video is ready.</p>
+          </div>
+        </div>
+
+        <div class="panel-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>AI highlights</h3>
+              <span id="highlightCount" class="counter">0 clips</span>
+            </div>
+            <div id="highlights" class="highlights empty-list">Upload a video to automatically find highlights.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h3>Transcript</h3><button id="copyTranscript" class="text-btn" disabled>Copy</button></div>
+            <div id="transcript" class="transcript empty-list">Your transcript will appear here.</div>
+          </section>
+        </div>
+
+        <section class="seo-panel">
+          <div class="panel-head seo-head">
+            <div>
+              <h3>YouTube SEO Pack</h3>
+              <p>Automatically generated from the selected clip.</p>
+            </div>
+            <button id="copySeo" class="secondary small-btn" disabled>Copy all SEO</button>
+          </div>
+
+          <div class="seo-grid">
+            <label class="seo-field seo-title-field">
+              <span>YouTube title</span>
+              <textarea id="seoTitle" rows="2" placeholder="Generated title will appear here"></textarea>
+              <button class="copy-field" data-copy="seoTitle" disabled>Copy title</button>
+            </label>
+
+            <label class="seo-field seo-description-field">
+              <span>Description</span>
+              <textarea id="seoDescription" rows="7" placeholder="Generated description will appear here"></textarea>
+              <button class="copy-field" data-copy="seoDescription" disabled>Copy description</button>
+            </label>
+
+            <label class="seo-field">
+              <span>Tags / keywords</span>
+              <textarea id="seoTags" rows="5" placeholder="Generated tags will appear here"></textarea>
+              <button class="copy-field" data-copy="seoTags" disabled>Copy tags</button>
+            </label>
+
+            <label class="seo-field">
+              <span>Hashtags</span>
+              <textarea id="seoHashtags" rows="5" placeholder="Generated hashtags will appear here"></textarea>
+              <button class="copy-field" data-copy="seoHashtags" disabled>Copy hashtags</button>
+            </label>
+          </div>
+
+          <div class="seo-actions">
+            <button id="downloadSeo" class="secondary" disabled>Download SEO text</button>
+            <button id="downloadSrt" class="secondary" disabled>Download captions (.srt)</button>
+          </div>
+        </section>
+
+        <section id="downloadPanel" class="download-panel hidden">
+          <div>
+            <strong>Your clip is ready</strong>
+            <p>No watermark added. The finished clip can also be sent to the YouTube Upload section below.</p>
+          </div>
+          <a id="downloadLink" class="primary" download="clipfree-ai-youtube-short.mp4">Download clip</a>
+        </section>
+      </section>
+    </section>
+
+    <section id="youtube-growth" class="growth-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">YOUTUBE GROWTH DASHBOARD</div>
+          <h2>Use your real channel data, not guesses.</h2>
+          <p>Connect your own YouTube channel to review views, estimated watch time, subscriber gains, top videos and metadata opportunities.</p>
+        </div>
+        <div class="connect-actions">
+          <a href="#upload" aria-label="Go to ClipFree's YouTube upload tools" style="display:inline-flex;align-items:center;justify-content:center;background:#111;border-radius:10px;padding:8px 12px;text-decoration:none">
+            <img src="https://developers.google.com/static/youtube/images/developed-with-youtube-sentence-case-light.png" alt="Developed with YouTube" style="display:block;width:180px;max-width:42vw;height:auto" />
+          </a>
+          <button id="connectYoutube" class="primary">Connect YouTube</button>
+          <button id="disconnectYoutube" class="secondary hidden">Disconnect</button>
+        </div>
+      </div>
+
+      <div class="notice subtle" style="margin-bottom:12px">
+        <strong>Before you connect:</strong> ClipFree AI requests only the Google/YouTube permissions used by the features shown on this page: permission to view and manage your YouTube videos, captions, playlists and channel data needed for creator/upload tools, plus read-only access to your YouTube Analytics reports. ClipFree uses this data only to provide the features you choose in this browser. It does not sell Google user data, use it for advertising, or use it to train AI models. Google shows its own consent screen before access is granted. You can disconnect and revoke access at any time. <a href="privacy.html">Read the Privacy Policy</a>.
+      </div>
+      <div class="notice subtle" style="margin-bottom:12px">
+        <strong>OAuth scopes used:</strong> <code>youtube.force-ssl</code> for YouTube creator/upload/channel actions and <code>yt-analytics.readonly</code> for the analytics dashboard. ClipFree AI is an independent application and is not endorsed by YouTube.
+      </div>
+
+      <div id="youtubeConnectionStatus" class="notice">YouTube is not connected yet. Add your Google OAuth Client ID in Setup, then connect.</div>
+
+      <div class="metric-grid">
+        <article class="metric-card"><span>Views · last 28 days</span><strong id="metricViews">—</strong></article>
+        <article class="metric-card"><span>Estimated watch hours</span><strong id="metricWatchHours">—</strong></article>
+        <article class="metric-card"><span>Average view duration</span><strong id="metricAvgDuration">—</strong></article>
+        <article class="metric-card"><span>Net subscribers</span><strong id="metricNetSubs">—</strong></article>
+      </div>
+
+      <div class="growth-grid">
+        <section class="growth-card">
+          <div class="panel-head"><h3>Channel snapshot</h3><button id="refreshChannel" class="text-btn" disabled>Refresh</button></div>
+          <div id="channelSnapshot" class="card-body muted">Connect YouTube to load your channel.</div>
+        </section>
+
+        <section class="growth-card">
+          <div class="panel-head"><h3>Automatic growth plan</h3><button id="buildGrowthPlan" class="text-btn" disabled>Rebuild</button></div>
+          <div id="growthPlan" class="card-body muted">Your plan will be generated from your recent videos and analytics.</div>
+        </section>
+      </div>
+
+      <section class="growth-card wide-card">
+        <div class="panel-head">
+          <div><h3>Video opportunities</h3><p class="subcopy">Metadata completeness + real performance data where available.</p></div>
+          <div class="mini-actions"><button id="autoOptimizeChannel" class="primary small-btn" disabled>Auto-optimize channel</button><button id="autoFixMetadata" class="secondary small-btn" disabled>Auto-fill incomplete</button><button id="loadMoreVideos" class="secondary small-btn" disabled>Refresh videos</button></div>
+        </div>
+        <div id="videoAuditTable" class="table-wrap muted">Connect YouTube to audit your videos.</div>
+      </section>
+
+      <section class="growth-card wide-card">
+        <div class="panel-head"><div><h3>Channel description helper</h3><p class="subcopy">Build a clearer channel description from your real content themes. You review it before applying.</p></div></div>
+        <div class="editor-row">
+          <textarea id="channelDescriptionDraft" rows="7" placeholder="Connect YouTube, then generate a suggested channel description."></textarea>
+          <div class="stack-actions">
+            <button id="generateChannelDescription" class="secondary" disabled>Generate description</button>
+            <button id="applyChannelDescription" class="primary" disabled>Apply to YouTube</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="finder" class="growth-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">YOUTUBE CREATIVE COMMONS DISCOVERY</div>
+          <h2>Find YouTube videos marked for reuse.</h2>
+          <p>This separate discovery tool searches videos YouTube reports as Creative Commons and builds attribution text. It does not rip or download YouTube videos. For a source ClipFree can automatically download and process, use the FULL AUTO Wikimedia Commons finder above.</p>
+        </div>
+      </div>
+
+      <div class="finder-bar">
+        <input id="ccSearchQuery" type="search" placeholder="Search a topic, e.g. New Zealand travel" />
+        <button id="ccSearchButton" class="primary">Find Creative Commons videos</button>
+      </div>
+      <div id="ccFinderStatus" class="notice subtle">Connect YouTube or add an API key in Setup to search.</div>
+      <div id="ccResults" class="video-result-grid"></div>
+    </section>
+
+    <section id="upload" class="growth-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">YOUTUBE UPLOAD</div>
+          <h2>Upload your finished clip with the SEO pack.</h2>
+          <p>FULL AUTO can use this section automatically. You can also use it manually to upload a generated clip or your own video with title, description, tags, captions, thumbnail and playlist options.</p>
+        </div>
+      </div>
+
+      <div class="upload-grid">
+        <section class="growth-card">
+          <div class="card-body">
+            <label class="upload-box compact-upload" for="youtubeUploadFile">
+              <input id="youtubeUploadFile" type="file" accept="video/*" />
+              <strong id="youtubeUploadFileLabel">Use generated clip or choose a video</strong>
+              <span>The generated ClipFree export is selected automatically when available.</span>
+            </label>
+            <div id="youtubeUploadReady" class="notice subtle">No upload file selected yet.</div>
+          </div>
+        </section>
+
+        <section class="growth-card">
+          <div class="card-body form-grid">
+            <label><span>Title</span><input id="uploadTitle" maxlength="100" placeholder="YouTube title" /></label>
+            <label><span>Description</span><textarea id="uploadDescription" rows="7" placeholder="YouTube description"></textarea></label>
+            <label><span>Tags</span><textarea id="uploadTags" rows="3" placeholder="tag one, tag two"></textarea></label>
+            <div class="inline-three">
+              <label><span>Privacy</span><select id="uploadPrivacy"><option value="private" selected>Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label>
+              <label><span>Category</span><select id="uploadCategory"><option value="22" selected>People & Blogs</option><option value="15">Pets & Animals</option><option value="24">Entertainment</option><option value="10">Music</option><option value="26">Howto & Style</option><option value="28">Science & Technology</option><option value="27">Education</option></select></label>
+              <label><span>Audience</span><select id="uploadMadeForKids"><option value="false" selected>Not made for kids</option><option value="true">Made for kids</option></select></label>
+            </div>
+            <label><span>Add to playlist after upload <em>(optional)</em></span><select id="uploadPlaylist"><option value="">No playlist</option></select></label>
+            <label class="checkline"><input id="uploadCaptions" type="checkbox" checked /> Upload generated English SRT captions when available</label>
+            <label class="checkline"><input id="uploadThumbnail" type="checkbox" checked /> Upload the automatically generated thumbnail when available</label>
+            <label class="checkline"><input id="notifySubscribers" type="checkbox" /> Notify subscribers about this upload</label>
+            <label class="checkline"><input id="uploadCertification" type="checkbox" /> I confirm I have the rights to upload this content and it complies with the <a href="https://www.youtube.com/howyoutubeworks/policies/community-guidelines/" target="_blank" rel="noopener">YouTube Community Guidelines</a>.</label>
+            <button id="uploadToYoutube" class="primary" disabled>Upload to YouTube</button>
+            <div class="progress upload-progress"><div id="youtubeUploadProgress"></div></div>
+            <div id="youtubeUploadStatus" class="notice subtle">Connect YouTube before uploading.</div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="setup" class="growth-shell setup-shell">
+      <div class="section-title">
+        <div>
+          <div class="badge">ONE-TIME SETUP</div>
+          <h2>Connect the official YouTube APIs.</h2>
+          <p>Your OAuth Client ID and optional API key are stored only in this browser's local storage. Do not paste a Google client secret into this website.</p>
+        </div>
+      </div>
+
+      <div class="setup-grid">
+        <section class="growth-card">
+          <div class="card-body form-grid">
+            <label><span>Google OAuth Client ID</span><input id="googleClientId" placeholder="1234567890-xxxx.apps.googleusercontent.com" autocomplete="off" /></label>
+            <label><span>YouTube API key <em>(optional)</em></span><input id="youtubeApiKey" placeholder="Used only for public Creative Commons searches before login" autocomplete="off" /></label>
+            <button id="saveYoutubeSettings" class="primary">Save settings on this device</button>
+            <button id="runDiagnostics" class="secondary">Run browser diagnostics</button>
+            <button id="clearYoutubeSettings" class="secondary">Clear saved settings</button>
+            <div id="settingsStatus" class="notice subtle">No credentials are bundled in this website.</div>
+            <div id="diagnosticsStatus" class="notice subtle hidden"></div>
+            <div class="notice subtle">
+              <strong>YouTube API compliance:</strong> For API uploads to be eligible for Public visibility, YouTube requires newer unverified API projects to pass a compliance audit. Use the official
+              <a href="https://support.google.com/youtube/contact/yt_api_form" target="_blank" rel="noopener">YouTube Data API audit form</a>.
+              Keep <a href="privacy.html">Privacy Policy</a>, <a href="terms.html">Terms</a>, and the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms</a> available for review.
+            </div>
+            <div class="notice subtle">
+              <strong>Google OAuth verification disclosure:</strong> ClipFree requests <code>youtube.force-ssl</code> because its visible creator tools can upload videos/captions/thumbnails, manage playlists and perform channel actions you initiate, and <code>yt-analytics.readonly</code> because the visible analytics dashboard reads your YouTube Analytics reports. Access tokens stay in page memory for the active session; the static GitHub Pages build does not operate a server database that stores your token or channel analytics.
+            </div>
+          </div>
+        </section>
+
+        <section class="growth-card">
+          <div class="card-body form-grid">
+            <h3>Charity donation button ❤️</h3>
+            <p class="subcopy">For the safest setup, use the charity or fundraiser's official donation page so ClipFree never handles the money.</p>
+            <label><span>Charity / fundraiser name</span><input id="charityName" placeholder="e.g. SPCA New Zealand" autocomplete="off" /></label>
+            <label><span>Official donation URL</span><input id="charityDonationUrl" placeholder="https://..." inputmode="url" autocomplete="off" /></label>
+            <button id="saveCharitySettings" class="primary" type="button">Save charity donation link</button>
+            <div id="charitySettingsStatus" class="notice subtle">No donation link has been configured yet.</div>
+          </div>
+        </section>
+
+        <section class="growth-card">
+          <div class="card-body setup-steps">
+            <h3>Google Cloud setup</h3>
+            <ol>
+              <li>Create or open a Google Cloud project.</li>
+              <li>Enable <strong>YouTube Data API v3</strong> and <strong>YouTube Analytics API</strong>.</li>
+              <li>Create an <strong>OAuth 2.0 Client ID → Web application</strong>.</li>
+              <li>Add <code>https://frymastercheese.github.io</code> as an Authorized JavaScript origin.</li>
+              <li>Paste the Client ID into the box on the left and save.</li>
+              <li>For Google app details, you can use <code>https://frymastercheese.github.io/Video-clipper/privacy.html</code> and <code>https://frymastercheese.github.io/Video-clipper/terms.html</code>.</li>
+              <li>Optional: create a restricted API key for Creative Commons search without logging in.</li>
+            </ol>
+            <p class="warning-copy">For safety, this build never asks for your Google password or a client secret. Google handles sign-in directly.</p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+
+
+    <section id="donate" class="growth-shell donation-shell">
+      <div class="donation-card">
+        <div>
+          <div class="badge">GIVE BACK ❤️</div>
+          <h2>Support a charity directly.</h2>
+          <p id="donationMessage">The owner can connect an official charity or fundraiser donation page in Setup. ClipFree does not collect or hold the donation.</p>
+        </div>
+        <button class="primary donation-main donate-action" type="button">Donate to charity ❤️</button>
+      </div>
+    </section>
+
+    <section id="how" class="info-section">
+      <h2>What the automation does</h2>
+      <div class="cards">
+        <article><span>1</span><h3>Create</h3><p>Use your own video, automatically find reusable footage, or generate a fresh multi-source animal montage.</p></article>
+        <article><span>2</span><h3>Package</h3><p>Builds a title, description, tags, hashtags and timestamped captions from the selected clip.</p></article>
+        <article><span>3</span><h3>Review growth</h3><p>Uses your YouTube analytics to show watch hours, views, subscriber movement and top performers.</p></article>
+        <article><span>4</span><h3>Publish</h3><p>FULL AUTO can upload the finished Short, captions and thumbnail, then add it to a Shorts playlist after your channel is connected.</p></article>
+      </div>
+    </section>
+
+    <section id="privacy" class="privacy-section">
+      <h2>Important limits and channel safety</h2>
+      <p>ClipFree does not add a watermark or application-level clip counter. Browser memory, CPU/GPU speed, source-video size, API quotas and YouTube account/API restrictions still create practical limits. No tool can guarantee subscribers, views or watch hours. This build is designed to improve workflow and use your real channel data, not fake engagement.</p>
+      <p>For reused material, Creative Commons licensing and attribution are only part of the picture. Copyright, commercial-use rights and YouTube's reused/inauthentic-content monetization rules can still apply. Originality Guard automatically adds a distinct educational storyline and visible commentary to externally sourced footage, checks for repeated sources, and keeps higher-risk outputs Private for review. This reduces risk but cannot guarantee YouTube Partner Program approval.</p>
+    </section>
+  </main>
+
+  <footer>ClipFree AI • Uses YouTube API Services • Automatic clipping + YouTube workflow tools • No watermark added by the app<br><a href="privacy.html">Privacy Policy</a> • <a href="terms.html">Terms of Service</a> • <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a> • <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></footer>
+
+  <script type="module" src="app.js"></script>
+  <script type="module" src="youtube.js"></script>
+  <script type="module" src="animal-generator.js"></script>
+  <script type="module" src="site.js"></script>
+  <script type="module" src="premium-auto.js"></script>
+  <script type="module" src="originality-guard.js"></script>
+  <script type="module" src="category-pages.js"></script>
+  <script>
+    (() => {
+      const demoConnect = document.getElementById('demoConnectYoutube');
+      const demoDisconnect = document.getElementById('demoDisconnectYoutube');
+
+      demoConnect?.addEventListener('click', () => {
+        document.getElementById('connectYoutube')?.click();
+      });
+
+      demoDisconnect?.addEventListener('click', () => {
+        document.getElementById('disconnectYoutube')?.click();
+      });
+    })();
+  </script>
+</body>
+</html>
