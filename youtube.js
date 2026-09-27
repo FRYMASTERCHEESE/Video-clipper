@@ -251,16 +251,7 @@ async function waitForGoogle(timeout = 10000) {
 }
 
 
-const OAUTH_DEMO_ROUTE = /\/oauth-demo\.html$/i.test(window.location.pathname);
-
-function requireOAuthDemoRoute() {
-  if (!OAUTH_DEMO_ROUTE) {
-    throw new Error('YouTube connection is temporarily available only on ClipFree AI\'s private Google OAuth verification test route while verification is pending.');
-  }
-}
-
 async function requestAccessToken() {
-  requireOAuthDemoRoute();
   if (!state.settings.clientId) throw new Error('Add your Google OAuth Client ID in Setup first.');
   await waitForGoogle();
   return new Promise((resolve, reject) => {
@@ -309,14 +300,6 @@ function ytUrl(path, params = {}) {
 function setTopYoutubeStatus(status = 'disconnected', channelTitle = '') {
   const banner = $('topYoutubeConnection');
   if (!banner) return;
-
-  if (status === 'verification') {
-    banner.textContent = '● YouTube OAuth verification in progress';
-    banner.style.background = '#1b1630';
-    banner.style.color = '#cbbcff';
-    banner.style.borderColor = '#4f3f78';
-    return;
-  }
 
   if (status === 'connecting') {
     banner.textContent = '● Connecting to YouTube…';
@@ -1445,21 +1428,11 @@ window.ClipFreeYouTube = {
 };
 
 loadSettings();
-if (OAUTH_DEMO_ROUTE) {
-  setTopYoutubeStatus('disconnected');
-} else {
-  setTopYoutubeStatus('verification');
-  if (els.connect) {
-    els.connect.disabled = true;
-    els.connect.textContent = 'OAuth verification in progress';
-  }
-  if (els.disconnect) els.disconnect.classList.add('hidden');
-  setNotice(
-    els.connection,
-    'Google/YouTube connection is temporarily limited while ClipFree AI completes OAuth verification. The rest of ClipFree remains available.',
-    'subtle'
-  );
-}
+setYoutubeDisconnectedUi(
+  state.settings.clientId
+    ? 'Google OAuth verification is complete. Tap Connect YouTube to connect your channel.'
+    : 'YouTube is not connected yet. Add your Google OAuth Client ID in Setup, then connect.'
+);
 refreshFinderAvailability();
 refreshUploadState();
 if (window.ClipFreeExport) {
@@ -1471,7 +1444,7 @@ if (window.ClipFreeExport) {
 
 try {
   window.dispatchEvent(new CustomEvent('clipfree-youtube-ready', {
-    detail: { demoRoute: OAUTH_DEMO_ROUTE }
+    detail: { demoRoute: false, oauthVerified: true }
   }));
 } catch {}
 
