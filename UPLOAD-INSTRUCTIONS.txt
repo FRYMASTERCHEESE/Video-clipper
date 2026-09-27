@@ -1,31 +1,22 @@
-CLIPFREE AI — OAUTH DEMO BUGFIX
+CLIPFREE AI — GOOGLE OAUTH PRIVACY UPDATE
+27 September 2026
 
-Replace ONLY these two files in FRYMASTERCHEESE/Video-clipper:
-1. youtube.js
-2. oauth-demo.html
+These are replacement files for the existing GitHub repository:
+FRYMASTERCHEESE/Video-clipper
 
-Do NOT replace index.html or your other ClipFree files.
+1. Upload privacy.html to the repository root and replace the existing privacy.html.
+2. Upload index.html to the repository root and replace the existing index.html.
+3. DO NOT delete app.js, youtube.js, styles.css, terms.html or any other existing files.
+4. Wait for GitHub Pages / the custom domain to update.
+5. Open https://coreyvibe.org/privacy.html in a private/incognito tab and confirm the page says "Last updated: 27 September 2026."
+6. Confirm https://coreyvibe.org/ contains a visible Privacy Policy link.
+7. In Google Cloud Branding keep:
+   Homepage: https://coreyvibe.org
+   Privacy:  https://coreyvibe.org/privacy.html
+   Terms:    https://coreyvibe.org/terms.html
+8. After the live pages update, reply to the Google OAuth verification email or resubmit in Verification Center and state that the privacy policy was updated to explicitly disclose:
+   - who Google user data is shared/transferred/disclosed to;
+   - data protection mechanisms for sensitive Google user data;
+   - retention/deletion and revocation practices.
 
-WHAT THIS FIXES
-- OAuth success no longer gets falsely changed back to "not connected" just because analytics/videos/playlists had a loading problem.
-- Top status changes immediately after Google grants access.
-- Connected state hides the real Connect button and shows Disconnect.
-- Disconnect updates the UI immediately and revokes the token in the background.
-- Demo Connect/Disconnect buttons call the real ClipFree functions directly instead of clicking hidden DOM buttons.
-- Demo buttons wait until youtube.js is fully loaded.
-- Optional API failures no longer break the entire connection.
-- Analytics/video/playlist loading is isolated so one failure does not destroy the session.
-- Demo page shows a clear connection-state box.
-- Demo nav is simplified for faster recording.
-- Anchor targets have mobile scroll spacing so sticky headers do not cover sections.
-
-EXPECTED DEMO FLOW
-1 Privacy Policy
-2 Connect YouTube
-Top bar should change: Connecting → Connected — <channel>
-3 Analytics
-4 Upload Tools
-5 Disconnect
-Top bar should return to YouTube not connected
-
-If Google OAuth itself returns an error, the page will show the actual error instead of pretending the user is disconnected after a successful authorization.
+NOTE: This package changes only HTML/privacy disclosures and setup text. It does not modify the JavaScript upload/OAuth logic.
