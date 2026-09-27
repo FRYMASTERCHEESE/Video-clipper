@@ -13,6 +13,13 @@
   <meta property="og:description" content="Clip videos, build YouTube metadata, review channel performance and upload from one browser-based tool." />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    .top-youtube-connect{background:linear-gradient(135deg,#7c5cff,#5b47d8);color:#fff;font:inherit;font-weight:800;cursor:pointer;white-space:nowrap;border:1px solid #6d59dd}
+    .top-youtube-connect:disabled{cursor:wait;opacity:.78}
+    .top-youtube-connect.connected{background:#10271b;border-color:#276b45;color:#8ff0b5}
+    @media(max-width:700px){.topbar nav{gap:8px}.topbar nav .top-youtube-connect,.topbar nav .pill[href="#setup"]{font-size:.78rem;padding:9px 10px}}
+    @media(max-width:390px){.topbar nav .pill[href="#setup"]{display:none}}
+  </style>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script type="application/ld+json">
   {
@@ -37,6 +44,7 @@
       <a href="#youtube-growth">YouTube Growth</a>
       <a href="#finder">Reusable Finder</a>
       <a href="#donate">Donate ❤️</a>
+      <button id="topConnectYoutube" class="pill top-youtube-connect" type="button" aria-label="Connect YouTube">Connect YouTube</button>
       <a class="pill" href="#setup">Setup</a>
     </nav>
   </header>

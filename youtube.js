@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 
 const els = {
-  connect: $('connectYoutube'), disconnect: $('disconnectYoutube'), connection: $('youtubeConnectionStatus'),
+  connect: $('connectYoutube'), topConnect: $('topConnectYoutube'), disconnect: $('disconnectYoutube'), connection: $('youtubeConnectionStatus'),
   refresh: $('refreshChannel'), buildPlan: $('buildGrowthPlan'), loadVideos: $('loadMoreVideos'), autoFixMetadata: $('autoFixMetadata'),
   metricViews: $('metricViews'), metricWatch: $('metricWatchHours'), metricAvg: $('metricAvgDuration'), metricSubs: $('metricNetSubs'),
   snapshot: $('channelSnapshot'), plan: $('growthPlan'), audit: $('videoAuditTable'),
@@ -325,6 +325,23 @@ function setTopYoutubeStatus(status = 'disconnected', channelTitle = '') {
 }
 
 
+function setTopConnectButton(status = 'disconnected') {
+  if (!els.topConnect) return;
+  els.topConnect.classList.toggle('connected', status === 'connected');
+  if (status === 'connecting') {
+    els.topConnect.textContent = 'Connecting…';
+    els.topConnect.disabled = true;
+    return;
+  }
+  if (status === 'connected') {
+    els.topConnect.textContent = 'YouTube ✓';
+    els.topConnect.disabled = false;
+    return;
+  }
+  els.topConnect.textContent = 'Connect YouTube';
+  els.topConnect.disabled = false;
+}
+
 function emitYoutubeState(status, detail = {}) {
   try {
     window.dispatchEvent(new CustomEvent('clipfree-youtube-state', {
@@ -344,6 +361,7 @@ function setYoutubeConnectedUi(channelTitle = '') {
     els.disconnect.disabled = false;
   }
   setTopYoutubeStatus('connected', channelTitle);
+  setTopConnectButton('connected');
   setConnectedControls(true);
   refreshUploadState();
   emitYoutubeState('connected', { channelTitle });
@@ -360,6 +378,7 @@ function setYoutubeDisconnectedUi(message = 'YouTube is not connected. Your save
     els.disconnect.disabled = false;
   }
   setTopYoutubeStatus('disconnected');
+  setTopConnectButton('disconnected');
   setConnectedControls(false);
   refreshUploadState();
   if (els.connection) setNotice(els.connection, message, 'subtle');
@@ -375,6 +394,7 @@ async function connectYoutube() {
 
   try {
     setTopYoutubeStatus('connecting');
+    setTopConnectButton('connecting');
     emitYoutubeState('connecting');
 
     if (els.connect) {
@@ -460,6 +480,7 @@ function setConnectedControls(enabled) {
 }
 
 els.connect.addEventListener('click', connectYoutube);
+if (els.topConnect) els.topConnect.addEventListener('click', connectYoutube);
 els.disconnect.addEventListener('click', disconnectYoutube);
 els.refresh.addEventListener('click', refreshAllChannelData);
 els.loadVideos.addEventListener('click', refreshAllChannelData);

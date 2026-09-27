@@ -1,34 +1,20 @@
-CLIPFREE AI — GOOGLE OAUTH APPROVED UPDATE
+CLIPFREE AI — TOP CONNECT YOUTUBE + QUOTA SAVER
 Updated: 28 September 2026
 
-UPLOAD ONLY THIS FILE TO YOUR GITHUB REPO ROOT:
-- youtube.js — replace the existing youtube.js
-
-Repository:
+Upload these TWO files to the ROOT of:
 FRYMASTERCHEESE/Video-clipper
 
-DO NOT replace index.html or privacy.html with older copies.
-Your current index.html and privacy.html already contain the Google privacy disclosures that passed OAuth verification.
+1. index.html  — replace existing
+2. youtube.js  — replace existing
 
-WHAT THIS UPDATE CHANGES
-- Removes the temporary /oauth-demo.html-only sign-in restriction.
-- Enables the normal Connect YouTube button on https://coreyvibe.org/.
-- Removes the "YouTube OAuth verification in progress" state and banner behavior.
-- Keeps the two verified OAuth scopes:
-  https://www.googleapis.com/auth/youtube.force-ssl
-  https://www.googleapis.com/auth/yt-analytics.readonly
-- Keeps OAuth access tokens in browser page memory only.
-- Keeps Disconnect/revoke behavior.
-- Keeps the existing FULL AUTO, analytics, upload, playlist, caption and thumbnail code.
+DO NOT replace privacy.html. Keep the privacy policy version Google approved.
+DO NOT delete any other files.
 
-AFTER UPLOADING
-1. Commit the replacement youtube.js to the main branch.
-2. Wait for GitHub Pages / coreyvibe.org to update.
-3. Open https://coreyvibe.org/#autopilot and refresh the page.
-4. The top status should say YouTube not connected instead of OAuth verification in progress.
-5. Tap Connect YouTube and complete Google sign-in.
-
-IMPORTANT
-Google OAuth verification and the YouTube Data API compliance audit are separate.
-This update removes the temporary OAuth-verification gate because Google has verified Branding and Data Access.
-It does NOT bypass or remove any separate YouTube API compliance/audit restrictions. If YouTube still forces API uploads to Private, keep that safeguard until the separate YouTube API audit is approved.
+WHAT THIS UPDATE DOES
+- Adds a visible Connect YouTube button in the sticky top bar.
+- On phones, keeps the button visible at the top.
+- Button changes to Connecting… during Google OAuth.
+- Button changes to YouTube ✓ after a successful connection.
+- Keeps the normal YouTube connect/disconnect controls lower on the page.
+- Includes the quota-saving youtube.js changes from the previous update.
+- Keeps the approved OAuth scopes and revoke/disconnect behavior.
