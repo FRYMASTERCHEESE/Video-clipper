@@ -207,6 +207,51 @@
     lastError: ''
   };
 
+  window.ClipFreeTransferredUploadState = window.ClipFreeTransferredUploadState || {
+    total: 0,
+    ids: [],
+    failed: 0,
+    failedIds: [],
+    lastError: ''
+  };
+
+  if (!window.__clipfreeUploadTrackerListenersV5) {
+    window.__clipfreeUploadTrackerListenersV5 = true;
+
+    window.addEventListener('clipfree-youtube-upload-transferred', event => {
+      const id = String(event?.detail?.videoId || '').trim();
+      if (!id) return;
+      const s = window.ClipFreeTransferredUploadState;
+      if (!s.ids.includes(id)) {
+        s.ids.push(id);
+        s.total += 1;
+      }
+    });
+
+    window.addEventListener('clipfree-youtube-upload-confirmed', event => {
+      const id = String(event?.detail?.videoId || '').trim();
+      if (!id) return;
+      const s = window.ClipFreeConfirmedUploadState;
+      if (!s.ids.includes(id)) {
+        s.ids.push(id);
+        s.total += 1;
+      }
+      s.lastError = '';
+    });
+
+    window.addEventListener('clipfree-youtube-upload-failed', event => {
+      const id = String(event?.detail?.videoId || '').trim();
+      const msg = String(event?.detail?.message || 'YouTube could not process an uploaded Short.');
+      const t = window.ClipFreeTransferredUploadState;
+      if (id && !t.failedIds.includes(id)) {
+        t.failedIds.push(id);
+        t.failed += 1;
+      }
+      t.lastError = msg;
+      window.ClipFreeConfirmedUploadState.lastError = msg;
+    });
+  }
+
   function addOption(select, value) {
     if (!select || [...select.options].some(o => Number(o.value) === value)) return;
     const option = document.createElement('option');
@@ -399,8 +444,8 @@
         select.value = String(chunk);
         select.dispatchEvent(new Event('change', {bubbles:true}));
 
-        const confirmedBefore = Number(window.ClipFreeConfirmedUploadState?.total || 0);
-        setBulkStatus(`Round ${i + 1}/${chunks.length}: creating ${chunk} Short${chunk === 1 ? '' : 's'} (${bulk.completed}/${requested} confirmed on YouTube)…`, bulk.completed);
+        const transferredBefore = Number(window.ClipFreeTransferredUploadState?.total || 0);
+        setBulkStatus(`Round ${i + 1}/${chunks.length}: creating ${chunk} Short${chunk === 1 ? '' : 's'} (${bulk.completed}/${requested} uploaded to YouTube)…`, bulk.completed);
 
         bulk.internalClick = true;
         try {
@@ -411,23 +456,24 @@
 
         await waitForCycle(button, kind);
 
-        const confirmedAfter = Number(window.ClipFreeConfirmedUploadState?.total || 0);
-        const confirmedThisRound = Math.max(0, confirmedAfter - confirmedBefore);
-        bulk.completed = Math.min(requested, bulk.completed + confirmedThisRound);
+        const transferredAfter = Number(window.ClipFreeTransferredUploadState?.total || 0);
+        const transferredThisRound = Math.max(0, transferredAfter - transferredBefore);
+        bulk.completed = Math.min(requested, bulk.completed + transferredThisRound);
 
-        if (confirmedThisRound < chunk) {
-          const lastError = window.ClipFreeConfirmedUploadState?.lastError || '';
+        if (transferredThisRound < chunk) {
+          const lastError = window.ClipFreeTransferredUploadState?.lastError || window.ClipFreeConfirmedUploadState?.lastError || '';
           throw new Error(
-            `YouTube confirmed ${confirmedThisRound}/${chunk} uploads in this round. ` +
-            `${lastError || 'The batch will stop here instead of pretending the videos were uploaded.'}`
+            `YouTube returned video IDs for ${transferredThisRound}/${chunk} uploads in this round. ` +
+            `${lastError || 'The batch will stop here instead of pretending the missing uploads reached YouTube.'}`
           );
         }
 
-        setBulkStatus(`${bulk.completed}/${requested} Shorts confirmed on YouTube. Preparing the next round…`, bulk.completed, 'good');
+        const processed = Number(window.ClipFreeConfirmedUploadState?.total || 0);
+        setBulkStatus(`${bulk.completed}/${requested} Shorts uploaded to YouTube. ${processed} processed successfully so far. Preparing the next round…`, bulk.completed, 'good');
         await sleep(1000);
       }
 
-      setBulkStatus(`All ${requested} Shorts are confirmed on YouTube ❤️ Check YouTube Studio for their visibility/status.`, requested, 'good');
+      setBulkStatus(`All ${requested} Shorts reached YouTube and received video IDs ❤️ YouTube may still be processing some of them in the background.`, requested, 'good');
     } catch (err) {
       console.error('ClipFree 20-mode stopped', err);
       setBulkStatus(`Stopped after ${bulk.completed}/${requested}. ${err?.message || err}`, bulk.completed, 'bad');
@@ -1068,14 +1114,30 @@
       throw new Error(finalText);
     }
 
+    const transferredTotal = Number(window.ClipFreeTransferredUploadState?.total || 0);
+    const transferredStart = Number(window.__clipfreeSimpleTransferredStart || 0);
+    const transferredThisRun = Math.max(0, transferredTotal - transferredStart);
+
     const confirmedTotal = Number(window.ClipFreeConfirmedUploadState?.total || 0);
     const confirmedThisRun = Math.max(0, confirmedTotal - Number(confirmedStart || 0));
-    if (confirmedThisRun < requested) {
-      throw new Error(`Only ${confirmedThisRun}/${requested} Shorts from this run were confirmed by YouTube. ClipFree will not report success without a real YouTube video ID.`);
+
+    if (transferredThisRun < requested) {
+      const lastError = window.ClipFreeTransferredUploadState?.lastError || window.ClipFreeConfirmedUploadState?.lastError || '';
+      throw new Error(
+        `Only ${transferredThisRun}/${requested} Shorts from this run reached YouTube and received video IDs. ` +
+        `${lastError || 'ClipFree will not pretend the missing uploads succeeded.'}`
+      );
     }
 
     setSimpleProgress(100);
-    setSimpleStatus(`${requested} Short${requested === 1 ? '' : 's'} confirmed on YouTube ❤️ Check YouTube Studio for visibility/status.`, 'good');
+    if (confirmedThisRun >= requested) {
+      setSimpleStatus(`${requested}/${requested} Shorts uploaded and processed successfully by YouTube ❤️`, 'good');
+    } else {
+      setSimpleStatus(
+        `${requested}/${requested} Shorts uploaded to YouTube with real video IDs. ${confirmedThisRun}/${requested} have finished processing so far; YouTube is still processing the rest in the background.`,
+        'good'
+      );
+    }
   }
 
   $('simpleStart')?.addEventListener('click', async () => {
@@ -1103,6 +1165,7 @@
       if (!nativeButton) throw new Error('The animal Shorts engine is not available. Refresh ClipFree and try again.');
 
       const confirmedStart = Number(window.ClipFreeConfirmedUploadState?.total || 0);
+      window.__clipfreeSimpleTransferredStart = Number(window.ClipFreeTransferredUploadState?.total || 0);
       setSimpleStatus(`Starting ${cfg.count} SEO-optimized Short${cfg.count === 1 ? '' : 's'}… Keep this tab open.`);
       nativeButton.click();
 
@@ -1547,12 +1610,11 @@
         throw err;
       }
 
-      const confirmed = window.ClipFreeConfirmedUploadState;
-      if (!confirmed.ids.includes(result.id)) {
-        confirmed.ids.push(result.id);
-        confirmed.total += 1;
+      const transferred = window.ClipFreeTransferredUploadState;
+      if (!transferred.ids.includes(result.id)) {
+        transferred.ids.push(result.id);
+        transferred.total += 1;
       }
-      confirmed.lastError = '';
 
       for (const key of keys) used.add(key);
       saveUsed(used);

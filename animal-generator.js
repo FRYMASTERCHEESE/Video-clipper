@@ -339,9 +339,13 @@ async function generateAnimalShort(){
         rememberMediaHash(sourceHash);
         persistentMediaHashes.add(sourceHash);
       }
-      setStatus(`Short ${batchIndex+1}/${batchCount} processed successfully on YouTube. Footage fingerprint + source permanently added to no-repeat history.`,baseProgress+24,'good');
+      if (uploadResult?.processingStatus === 'succeeded') {
+        setStatus(`Short ${batchIndex+1}/${batchCount} processed successfully on YouTube. Footage fingerprint + source permanently added to no-repeat history.`,baseProgress+24,'good');
+      } else {
+        setStatus(`Short ${batchIndex+1}/${batchCount} uploaded to YouTube with a real video ID. YouTube is still processing it in the background while ClipFree continues the batch.`,baseProgress+24,'good');
+      }
     }
-    setStatus(`${batchCount} animal Short${batchCount===1?'':'s'} confirmed on YouTube ❤️`,100,'good');
+    setStatus(`${batchCount} animal Short${batchCount===1?'':'s'} uploaded to YouTube with real video IDs ❤️ YouTube may still be processing some in the background.`,100,'good');
   }catch(err){ console.error(err); setStatus(err?.message || String(err),0,'bad'); }
   finally{ running=false; generateButton.disabled=false; }
 }

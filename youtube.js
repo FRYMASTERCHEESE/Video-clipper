@@ -1353,7 +1353,7 @@ async function readUploadedVideoState(videoId, token) {
   }
 }
 
-async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=90000, intervalMs=3000} = {}) {
+async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=30000, intervalMs=3000} = {}) {
   const started = Date.now();
   let last = null;
 
@@ -1373,6 +1373,80 @@ async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=90000, interv
   }
 
   return { status:'pending', video:last };
+}
+
+
+window.ClipFreeYouTubeProcessingState = window.ClipFreeYouTubeProcessingState || {
+  transferred: 0,
+  confirmed: 0,
+  failed: 0,
+  transferredIds: [],
+  confirmedIds: [],
+  failedIds: [],
+  pendingIds: [],
+  lastError: ''
+};
+
+function emitUploadStateEvent(name, detail) {
+  try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+}
+
+function markTransferred(videoId, title, requestedPrivacy) {
+  const s = window.ClipFreeYouTubeProcessingState;
+  if (!s.transferredIds.includes(videoId)) {
+    s.transferredIds.push(videoId);
+    s.transferred += 1;
+  }
+  if (!s.pendingIds.includes(videoId) && !s.confirmedIds.includes(videoId) && !s.failedIds.includes(videoId)) {
+    s.pendingIds.push(videoId);
+  }
+  emitUploadStateEvent('clipfree-youtube-upload-transferred', { videoId, title, requestedPrivacy });
+}
+
+function markConfirmed(videoId, title, requestedPrivacy, actualPrivacy) {
+  const s = window.ClipFreeYouTubeProcessingState;
+  s.pendingIds = s.pendingIds.filter(id => id !== videoId);
+  if (!s.confirmedIds.includes(videoId)) {
+    s.confirmedIds.push(videoId);
+    s.confirmed += 1;
+  }
+  s.lastError = '';
+  emitUploadStateEvent('clipfree-youtube-upload-confirmed', {
+    videoId, title, requestedPrivacy, privacy: actualPrivacy || requestedPrivacy
+  });
+}
+
+function markProcessingFailed(videoId, title, message) {
+  const s = window.ClipFreeYouTubeProcessingState;
+  s.pendingIds = s.pendingIds.filter(id => id !== videoId);
+  if (!s.failedIds.includes(videoId)) {
+    s.failedIds.push(videoId);
+    s.failed += 1;
+  }
+  s.lastError = message || 'YouTube could not process the uploaded video.';
+  emitUploadStateEvent('clipfree-youtube-upload-failed', { videoId, title, message: s.lastError });
+}
+
+async function watchYouTubeProcessingInBackground(videoId, token, title, requestedPrivacy) {
+  const deadline = Date.now() + (20 * 60 * 1000);
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 15000));
+    const state = await readUploadedVideoState(videoId, token);
+    const processing = String(state?.processingDetails?.processingStatus || '').toLowerCase();
+    const failure = String(state?.processingDetails?.processingFailureReason || '').trim();
+
+    if (processing === 'succeeded') {
+      const actualPrivacy = state?.status?.privacyStatus || requestedPrivacy;
+      markConfirmed(videoId, title, requestedPrivacy, actualPrivacy);
+      return;
+    }
+
+    if (processing === 'failed' || processing === 'terminated') {
+      const reason = failure ? ` (${failure})` : '';
+      markProcessingFailed(videoId, title, `YouTube could not process the uploaded video${reason}.`);
+      return;
+    }
+  }
 }
 
 async function uploadToYouTube(options = {}) {
@@ -1420,18 +1494,36 @@ async function uploadToYouTube(options = {}) {
       setNotice(els.uploadStatus, `Uploading to YouTube… ${Math.round(p * 100)}%`);
       if (state.autoUploadQueued) setAutoStatus('Uploading to YouTube', 80 + Math.round(p * 18), `Upload ${Math.round(p * 100)}% complete…`, 'good');
     });
-    if (!result?.id) throw new Error('YouTube accepted the request but did not return a video ID. The upload is not counted as successful.');
+    if (!result?.id) throw new Error('YouTube accepted the request but did not return a video ID. The upload is not counted as transferred.');
 
-    setNotice(els.uploadStatus, 'Upload transferred. Waiting for YouTube to verify that the video file can be processed…');
+    markTransferred(result.id, metadata.snippet.title, requestedPrivacy);
+
+    setNotice(els.uploadStatus, 'Upload transferred to YouTube. Checking whether processing finishes quickly…');
     if (state.autoUploadQueued) {
       setAutoStatus('YouTube processing check', 96, 'The upload reached YouTube. ClipFree is waiting for YouTube to confirm the MP4 is processable before counting it as successful…', 'good');
     }
 
     const processingCheck = await waitForYouTubeProcessing(result.id, token);
     result.processingStatus = processingCheck.status;
-    if (processingCheck.status !== 'succeeded') {
+    result.confirmed = processingCheck.status === 'succeeded';
+
+    if (processingCheck.status === 'pending') {
       result.processingPending = true;
-      throw new Error('YouTube received the Short but it is still processing after 90 seconds. ClipFree stopped the batch and did NOT count it as confirmed. Check YouTube Studio before retrying so you do not create a duplicate.');
+      setNotice(
+        els.uploadStatus,
+        'Upload reached YouTube and has a real video ID. YouTube is still processing it, so ClipFree will continue the batch and keep checking this video in the background.'
+      );
+      if (state.autoUploadQueued) {
+        setAutoStatus(
+          'Uploaded — YouTube still processing',
+          98,
+          'A real YouTube video ID was returned. ClipFree is continuing the batch while YouTube finishes processing this Short in the background.',
+          'good'
+        );
+      }
+      watchYouTubeProcessingInBackground(
+        result.id, token, metadata.snippet.title, requestedPrivacy
+      ).catch(console.warn);
     }
 
     els.uploadProgress.style.width = '96%';
@@ -1461,17 +1553,18 @@ async function uploadToYouTube(options = {}) {
     result.actualPrivacy = actualPrivacy;
 
     els.uploadStatus.className = actualPrivacy === requestedPrivacy ? 'notice good' : 'notice';
-    if(requestedPrivacy === 'public' && actualPrivacy === 'private'){
-      els.uploadStatus.innerHTML = `Upload confirmed, but YouTube returned <strong>Private</strong> even though ClipFree requested <strong>Public</strong>. This is consistent with YouTube's API-project compliance restriction. ClipFree cannot override that restriction; Public API uploads become available after YouTube lifts it for the project. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video</a>.`;
+    if (result.processingStatus === 'pending') {
+      els.uploadStatus.className = 'notice good';
+      els.uploadStatus.innerHTML = `Upload transferred successfully and YouTube returned a real video ID. Processing is still pending in the background. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>.`;
+    } else if(requestedPrivacy === 'public' && actualPrivacy === 'private'){
+      els.uploadStatus.innerHTML = `Upload processed, but YouTube returned <strong>Private</strong> even though ClipFree requested <strong>Public</strong>. This is consistent with YouTube's API-project compliance restriction. ClipFree cannot override that restriction; Public API uploads become available after YouTube lifts it for the project. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video</a>.`;
     }else{
       els.uploadStatus.innerHTML = `Upload processed successfully by YouTube as <strong>${esc(actualPrivacy)}</strong>. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>.`;
     }
 
-    try {
-      window.dispatchEvent(new CustomEvent('clipfree-youtube-upload-confirmed', {
-        detail: { videoId: result.id, privacy: actualPrivacy, requestedPrivacy, title: metadata.snippet.title }
-      }));
-    } catch {}
+    if (result.processingStatus === 'succeeded') {
+      markConfirmed(result.id, metadata.snippet.title, requestedPrivacy, actualPrivacy);
+    }
     setTimeout(() => refreshAllChannelData().catch(console.warn), 1500);
     return result;
   } catch (err) {
