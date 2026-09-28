@@ -1,4 +1,4 @@
-ClipFree AI — 1–20 Shorts + SEO LINKS + TREND-AWARE BOOST
+ClipFree AI — STRICT PUBLIC DOMAIN / CC0 + HIGHEST RELEVANT KEYWORDS
 29 September 2026
 
 UPLOAD ONLY:
@@ -7,34 +7,37 @@ UPLOAD ONLY:
 Repository:
   FRYMASTERCHEESE/Video-clipper
 
-Replace the existing category-pages.js with this file.
+STRICT RIGHTS MODE
+• Wikimedia Commons: only Public Domain / CC0 items are accepted.
+• Internet Archive: only items whose metadata says Public Domain / CC0 are accepted.
+• Pexels and Pixabay are NOT used in this strict mode because their media is free-
+  licensed but still copyrighted.
+• ClipFree itself adds no watermark.
+• A source file can still contain an embedded logo/text made by its original creator;
+  metadata alone cannot guarantee that every frame is visually mark-free.
 
-INCLUDED AUTOMATICALLY
-• 1–20 Shorts from one simple screen
-• 9:16 creation + sequential upload
-• unique SEO title
-• SEO description
-• relevant tags and 3–5 hashtags
-• captions and strong thumbnail
-• source/licence attribution
-• Pets & Animals packaging
-• trend-aware wildlife/animal keyword pack
-• channel link
-• Shorts playlist or channel-Shorts link
-• watch-next link to a recent channel video
-• subscribe link
+WHY NOT "100 RANDOM WEBSITES"
+Scraping 100 arbitrary websites would increase copyright and watermark mistakes.
+Instead, this build searches large public-domain repositories/aggregators containing
+many collections and filters by explicit Public Domain / CC0 metadata.
 
-CURRENT TREND PACK
-Refreshed from current YouTube wildlife/animal keyword + trending-Short research
-on 28–29 September 2026. The code does NOT blindly add misleading phrases.
-Action/comparison terms (for example fight/attack/lion-vs-tiger) are only added
-when the actual source/title supports them.
+HIGHEST RELEVANT SEARCH TERMS FROM CURRENT RESEARCH
+Approx. current monthly search estimates from research on 28 Sep 2026:
+• shorts: ~4.13M (used as #Shorts / format signal, not stuffed everywhere)
+• animals: ~1.89M
+• wildlife: ~672K
+• animal facts: ~499K — only when the Short actually includes educational facts
+• wild animals: ~492K
+• wildlife documentary: ~447K — only documentary-style Shorts
+• tiger: ~419K — only tiger footage
+• animal shorts: ~225K
+• coyote: ~116K — only coyote footage
+• moose: ~95.5K — only moose footage
+• big cats: ~61K — only big-cat footage
+• wildlife shorts: ~47.6K, with strong recent growth
 
-IMPORTANT
-These links and metadata improve channel navigation and search relevance, but
-they cannot guarantee YouTube Home-page placement, subscribers, views or watch
-hours. YouTube distribution still depends heavily on viewer response,
-retention, satisfaction and recommendation systems.
+SEO RULE
+ClipFree uses the ACTUAL species term + the highest-volume accurate broad terms.
+It never inserts unrelated high-volume keywords just to chase traffic.
 
-Until the YouTube Data API compliance audit is approved, Google may still force
-API uploads to Private even when Public is selected.
+No SEO system can guarantee ranking, Home placement, views, subscribers or watch hours.
