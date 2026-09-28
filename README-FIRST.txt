@@ -1,4 +1,4 @@
-ClipFree AI — STRICT PUBLIC DOMAIN / CC0 + HIGHEST RELEVANT KEYWORDS
+ClipFree AI — GROWTH ENGINE FINAL
 29 September 2026
 
 UPLOAD ONLY:
@@ -7,37 +7,34 @@ UPLOAD ONLY:
 Repository:
   FRYMASTERCHEESE/Video-clipper
 
-STRICT RIGHTS MODE
-• Wikimedia Commons: only Public Domain / CC0 items are accepted.
-• Internet Archive: only items whose metadata says Public Domain / CC0 are accepted.
-• Pexels and Pixabay are NOT used in this strict mode because their media is free-
-  licensed but still copyrighted.
-• ClipFree itself adds no watermark.
-• A source file can still contain an embedded logo/text made by its original creator;
-  metadata alone cannot guarantee that every frame is visually mark-free.
+WHAT THIS BUILD DOES
+• Keeps ONE simple wildlife Shorts workflow.
+• Selector supports every amount from 1 to 20.
+• Uses the existing safe sequential processing for large batches.
+• Searches only the strict Public Domain / CC0 source pool already configured.
+• Keeps prior source-history protection so old source footage is not intentionally reused.
+• Identifies the ACTUAL animal from source metadata before final metadata/upload.
+• Derives an action (drinking, roaming, swimming, feeding, etc.) when the source title supports it.
+• Derives habitat (savanna, wetland, forest, desert, river, ocean, etc.) when supported.
+• Builds a unique title based on actual animal + actual action/habitat.
+• Keeps a title history to reduce repeated titles.
+• Adds a short original educational story/fact layer.
+• Uses up to 8 high-demand but relevant tags.
+• Uses exactly 3 strong relevant hashtags.
+• Creates a portrait 1080x1920 cover with text in the central safe zone.
+• Keeps source/licence attribution.
+• Keeps channel Shorts/subscribe links when the connected-channel identity is available.
 
-WHY NOT "100 RANDOM WEBSITES"
-Scraping 100 arbitrary websites would increase copyright and watermark mistakes.
-Instead, this build searches large public-domain repositories/aggregators containing
-many collections and filters by explicit Public Domain / CC0 metadata.
+EXAMPLE TITLE STRUCTURE
+Wild Lions Roaming in the African Savanna 🦁 #Shorts
+Coyote Drinking in the Wild 🐺 #Shorts
+Moose Swimming in the Wetland 🫎 #Shorts
 
-HIGHEST RELEVANT SEARCH TERMS FROM CURRENT RESEARCH
-Approx. current monthly search estimates from research on 28 Sep 2026:
-• shorts: ~4.13M (used as #Shorts / format signal, not stuffed everywhere)
-• animals: ~1.89M
-• wildlife: ~672K
-• animal facts: ~499K — only when the Short actually includes educational facts
-• wild animals: ~492K
-• wildlife documentary: ~447K — only documentary-style Shorts
-• tiger: ~419K — only tiger footage
-• animal shorts: ~225K
-• coyote: ~116K — only coyote footage
-• moose: ~95.5K — only moose footage
-• big cats: ~61K — only big-cat footage
-• wildlife shorts: ~47.6K, with strong recent growth
+The exact title depends on the ACTUAL source metadata.
+ClipFree never intentionally calls a coyote a lion.
 
-SEO RULE
-ClipFree uses the ACTUAL species term + the highest-volume accurate broad terms.
-It never inserts unrelated high-volume keywords just to chase traffic.
-
-No SEO system can guarantee ranking, Home placement, views, subscribers or watch hours.
+IMPORTANT
+• There is no legitimate SEO setting that guarantees a fixed number of subscribers/views.
+• This build focuses on accurate search relevance, originality, retention-friendly hooks and consistent packaging.
+• Large batches are production batches, not a recommendation to publish 20 repetitive videos at once.
+• Keep the browser tab open while a batch is rendering/uploading.

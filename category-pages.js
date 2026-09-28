@@ -2311,3 +2311,643 @@
       'STRICT RIGHTS MODE: ClipFree now accepts only source media marked Public Domain or CC0 from Wikimedia Commons and Internet Archive. It does not use Pexels/Pixabay in this mode because those are free-licensed but still copyrighted. SEO uses only the highest-volume relevant terms that accurately match the animal/video.';
   }, 900);
 })();
+
+/* CLIPFREE GROWTH ENGINE FINAL */
+/*
+  Goal: one clean workflow that makes up to 20 materially different wildlife Shorts.
+  Final-pass rules:
+  1) use unused Public Domain / CC0 source footage only
+  2) identify the ACTUAL animal from source metadata
+  3) derive action + habitat from source text where possible
+  4) create an original educational hook/story/captions
+  5) generate an accurate unique title + concise SEO description
+  6) use only high-demand RELEVANT keywords
+  7) keep all cover text inside the vertical safe area
+  8) remember recent title/source combinations to avoid repeats
+*/
+(() => {
+  const $ = id => document.getElementById(id);
+
+  const TITLE_HISTORY_KEY = 'clipfree_title_history_v4';
+  const CONTENT_HISTORY_KEY = 'clipfree_content_history_v4';
+
+  const SPECIES = [
+    {
+      key:'mountain lion', label:'Mountain Lion', emoji:'🐾',
+      re:/\b(mountain lion|cougar|puma|puma concolor)\b/i,
+      facts:[
+        'Mountain lions are powerful ambush predators built for short bursts of speed.',
+        'They use large home ranges and are usually solitary.'
+      ],
+      keywords:['mountain lion','wildlife','wild animals','big cats','animal shorts','wildlife shorts']
+    },
+    {
+      key:'coyote', label:'Coyote', emoji:'🐺',
+      re:/\b(coyote|canis latrans)\b/i,
+      facts:[
+        'Coyotes are highly adaptable canids found across much of North America.',
+        'They communicate with howls, yips and body language.'
+      ],
+      keywords:['coyote','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'wolf', label:'Wolf', emoji:'🐺',
+      re:/\b(wolf|wolves|canis lupus)\b/i,
+      facts:[
+        'Wolves are social canids that often live and hunt in family groups.',
+        'Scent, posture and vocalizations help wolves communicate across distance.'
+      ],
+      keywords:['wolf','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'fox', label:'Fox', emoji:'🦊',
+      re:/\b(fox|vulpes)\b/i,
+      facts:[
+        'Foxes rely on sharp hearing and smell to find food.',
+        'Many fox species are most active around dawn, dusk or at night.'
+      ],
+      keywords:['fox','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'lion', label:'Lion', emoji:'🦁',
+      re:/\b(lion|lioness|lionesses|panthera leo)\b/i,
+      facts:[
+        'Lions are the most social of the big cats and often live in prides.',
+        'A lion pride can coordinate resting, territory defence and hunting.'
+      ],
+      keywords:['lion','wildlife','wild animals','big cats','animal shorts','wildlife shorts']
+    },
+    {
+      key:'tiger', label:'Tiger', emoji:'🐅',
+      re:/\b(tiger|panthera tigris)\b/i,
+      facts:[
+        'Tigers are solitary big cats and strong swimmers.',
+        'Their stripe patterns are unique to each individual.'
+      ],
+      keywords:['tiger','wildlife','wild animals','big cats','animal shorts','wildlife shorts']
+    },
+    {
+      key:'leopard', label:'Leopard', emoji:'🐆',
+      re:/\b(leopard|panthera pardus)\b/i,
+      facts:[
+        'Leopards are powerful climbers that can carry prey into trees.',
+        'Their spotted coats help them blend into many different habitats.'
+      ],
+      keywords:['leopard','wildlife','wild animals','big cats','animal shorts','wildlife shorts']
+    },
+    {
+      key:'cheetah', label:'Cheetah', emoji:'🐆',
+      re:/\b(cheetah|acinonyx jubatus)\b/i,
+      facts:[
+        'Cheetahs are built for rapid acceleration over short distances.',
+        'Their long tails help with balance during high-speed turns.'
+      ],
+      keywords:['cheetah','wildlife','wild animals','big cats','animal shorts','wildlife shorts']
+    },
+    {
+      key:'moose', label:'Moose', emoji:'🫎',
+      re:/\b(moose|alces alces)\b/i,
+      facts:[
+        'Moose are the largest members of the deer family.',
+        'They are strong swimmers and often feed on aquatic plants.'
+      ],
+      keywords:['moose','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'elk', label:'Elk', emoji:'🦌',
+      re:/\b(elk|wapiti|cervus canadensis)\b/i,
+      facts:[
+        'Elk are large members of the deer family that often form herds.',
+        'Male elk use loud bugling calls during the breeding season.'
+      ],
+      keywords:['elk','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'deer', label:'Deer', emoji:'🦌',
+      re:/\b(deer|doe|stag|buck)\b/i,
+      facts:[
+        'Deer rely on excellent hearing and smell to detect danger.',
+        'Many deer species are most active around dawn and dusk.'
+      ],
+      keywords:['deer','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'bear', label:'Bear', emoji:'🐻',
+      re:/\b(bear|ursus|grizzly|black bear|polar bear)\b/i,
+      facts:[
+        'Bears have an exceptional sense of smell.',
+        'Bear diets vary widely by species, habitat and season.'
+      ],
+      keywords:['bear','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'elephant', label:'Elephant', emoji:'🐘',
+      re:/\b(elephant|loxodonta|elephas)\b/i,
+      facts:[
+        'Elephants use low-frequency calls that can travel long distances.',
+        'Elephant herds have complex social relationships and strong family bonds.'
+      ],
+      keywords:['elephant','wildlife','wild animals','animals','wildlife documentary','animal shorts','wildlife shorts']
+    },
+    {
+      key:'giraffe', label:'Giraffe', emoji:'🦒',
+      re:/\b(giraffe|giraffa)\b/i,
+      facts:[
+        'Giraffes use their long necks to browse leaves high above the ground.',
+        'Their patterned coats help break up their outline in woodland and savanna.'
+      ],
+      keywords:['giraffe','wildlife','wild animals','animals','wildlife documentary','animal shorts','wildlife shorts']
+    },
+    {
+      key:'zebra', label:'Zebra', emoji:'🦓',
+      re:/\b(zebra|equus quagga|equus zebra)\b/i,
+      facts:[
+        'Every zebra has a unique stripe pattern.',
+        'Zebras often stay in groups that can help individuals detect predators.'
+      ],
+      keywords:['zebra','wildlife','wild animals','animals','wildlife documentary','animal shorts','wildlife shorts']
+    },
+    {
+      key:'bison', label:'Bison', emoji:'🐃',
+      re:/\b(bison|buffalo)\b/i,
+      facts:[
+        'Bison are massive grazing mammals adapted to open grasslands.',
+        'Their thick shoulder muscles help power their large heads and forequarters.'
+      ],
+      keywords:['bison','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'hyena', label:'Hyena', emoji:'🐾',
+      re:/\b(hyena|hyaena)\b/i,
+      facts:[
+        'Spotted hyenas live in complex social groups called clans.',
+        'Hyenas have powerful jaws and communicate with many different calls.'
+      ],
+      keywords:['hyena','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'crocodile', label:'Crocodile', emoji:'🐊',
+      re:/\b(crocodile|crocodylus)\b/i,
+      facts:[
+        'Crocodiles are ambush predators that can remain very still in water.',
+        'Their eyes and nostrils sit high on the head, helping them watch while mostly submerged.'
+      ],
+      keywords:['crocodile','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'alligator', label:'Alligator', emoji:'🐊',
+      re:/\b(alligator)\b/i,
+      facts:[
+        'Alligators spend much of their time in freshwater wetlands.',
+        'They regulate body temperature by moving between sun, shade and water.'
+      ],
+      keywords:['alligator','wildlife','wild animals','animals','animal shorts','wildlife shorts']
+    },
+    {
+      key:'eagle', label:'Eagle', emoji:'🦅',
+      re:/\b(eagle|bald eagle|golden eagle)\b/i,
+      facts:[
+        'Eagles have excellent long-distance vision.',
+        'Their broad wings help them soar efficiently while searching for food.'
+      ],
+      keywords:['eagle','wildlife','wild animals','animals','birds','animal shorts','wildlife shorts']
+    },
+    {
+      key:'owl', label:'Owl', emoji:'🦉',
+      re:/\b(owl|owls)\b/i,
+      facts:[
+        'Many owls have specialized feathers that reduce flight noise.',
+        'Forward-facing eyes give owls strong depth perception.'
+      ],
+      keywords:['owl','wildlife','wild animals','animals','birds','animal shorts','wildlife shorts']
+    },
+    {
+      key:'shark', label:'Shark', emoji:'🦈',
+      re:/\b(shark|sharks)\b/i,
+      facts:[
+        'Sharks use several senses to detect movement and prey in the ocean.',
+        'Different shark species occupy habitats from coastal shallows to the open sea.'
+      ],
+      keywords:['shark','animals','wildlife','ocean wildlife','marine life','animal shorts','wildlife shorts']
+    },
+    {
+      key:'whale', label:'Whale', emoji:'🐋',
+      re:/\b(whale|whales)\b/i,
+      facts:[
+        'Whales are air-breathing mammals that must surface regularly.',
+        'Many whale species use sound to communicate across large distances.'
+      ],
+      keywords:['whale','animals','wildlife','ocean wildlife','marine life','animal shorts','wildlife shorts']
+    },
+    {
+      key:'dolphin', label:'Dolphin', emoji:'🐬',
+      re:/\b(dolphin|dolphins)\b/i,
+      facts:[
+        'Dolphins are social marine mammals with sophisticated communication.',
+        'Many species use echolocation to navigate and find prey.'
+      ],
+      keywords:['dolphin','animals','wildlife','ocean wildlife','marine life','animal shorts','wildlife shorts']
+    },
+    {
+      key:'seal', label:'Seal', emoji:'🦭',
+      re:/\b(seal|seals|sea lion)\b/i,
+      facts:[
+        'Seals are streamlined marine mammals adapted for efficient swimming.',
+        'They haul out on land or ice to rest, breed or care for young.'
+      ],
+      keywords:['seal','animals','wildlife','ocean wildlife','marine life','animal shorts','wildlife shorts']
+    }
+  ];
+
+  const ACTIONS = [
+    ['drinking',/\b(drink|drinking|waterhole|watering|water hole)\b/i],
+    ['roaming',/\b(roam|roaming|wandering)\b/i],
+    ['walking',/\b(walk|walking)\b/i],
+    ['running',/\b(run|running|sprinting)\b/i],
+    ['swimming',/\b(swim|swimming)\b/i],
+    ['feeding',/\b(feed|feeding|eating|grazing|browsing)\b/i],
+    ['resting',/\b(rest|resting|sleeping|relaxing)\b/i],
+    ['playing',/\b(play|playing)\b/i],
+    ['crossing',/\b(cross|crossing)\b/i],
+    ['climbing',/\b(climb|climbing)\b/i],
+    ['flying',/\b(fly|flying|soaring)\b/i],
+    ['hunting',/\b(hunt|hunting|stalking)\b/i],
+    ['calling',/\b(call|calling|howl|howling|roar|roaring)\b/i]
+  ];
+
+  const HABITATS = [
+    ['African Savanna',/\b(savanna|savannah)\b/i],
+    ['Wetland',/\b(wetland|marsh|swamp)\b/i],
+    ['Forest',/\b(forest|woodland|woods)\b/i],
+    ['Desert',/\b(desert|arid)\b/i],
+    ['Grassland',/\b(grassland|prairie|steppe)\b/i],
+    ['River',/\b(river|stream)\b/i],
+    ['Lake',/\b(lake)\b/i],
+    ['Ocean',/\b(ocean|sea|marine)\b/i],
+    ['Mountain Habitat',/\b(mountain|alpine)\b/i],
+    ['Coast',/\b(coast|coastal|shore|beach)\b/i],
+    ['Arctic',/\b(arctic|ice|tundra)\b/i]
+  ];
+
+  function loadJson(key, fallback=[]) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || 'null');
+      return value ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function saveJson(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }
+
+  function sourceText(detail) {
+    return (detail?.sources || []).map(s =>
+      `${s?.title || ''} ${s?.creator || ''} ${s?.sourceUrl || ''} ${s?.license || ''}`
+    ).join(' ');
+  }
+
+  function detectSpecies(detail) {
+    const text = `${detail?.detectedAnimal || ''} ${sourceText(detail)}`;
+    return SPECIES.find(s => s.re.test(text)) || null;
+  }
+
+  function detectAction(text) {
+    return ACTIONS.find(([,re]) => re.test(text))?.[0] || '';
+  }
+
+  function detectHabitat(text) {
+    return HABITATS.find(([,re]) => re.test(text))?.[0] || '';
+  }
+
+  function titleHistory() {
+    const arr = loadJson(TITLE_HISTORY_KEY, []);
+    return Array.isArray(arr) ? arr : [];
+  }
+
+  function rememberTitle(title) {
+    const arr = titleHistory().filter(x => x !== title);
+    arr.unshift(title);
+    saveJson(TITLE_HISTORY_KEY, arr.slice(0, 300));
+  }
+
+  function contentHistory() {
+    const arr = loadJson(CONTENT_HISTORY_KEY, []);
+    return Array.isArray(arr) ? arr : [];
+  }
+
+  function rememberContent(detail, title) {
+    const first = detail?.sources?.[0] || {};
+    const item = {
+      source:String(first.sourceUrl || first.fileUrl || first.title || ''),
+      title:String(title || ''),
+      at:Date.now()
+    };
+    const arr = contentHistory().filter(x => x.source !== item.source && x.title !== item.title);
+    arr.unshift(item);
+    saveJson(CONTENT_HISTORY_KEY, arr.slice(0, 1000));
+  }
+
+  function makeTitle(species, action, habitat, detail) {
+    const used = new Set(titleHistory().map(x => String(x).toLowerCase()));
+    const label = species?.label || 'Wild Animal';
+    const emoji = species?.emoji || '🌿';
+
+    const candidates = [];
+    if (action && habitat) {
+      candidates.push(`${label} ${action[0].toUpperCase()+action.slice(1)} in the ${habitat} ${emoji} #Shorts`);
+    }
+    if (action) candidates.push(`${label} ${action[0].toUpperCase()+action.slice(1)} in the Wild ${emoji} #Shorts`);
+    if (habitat) candidates.push(`Wild ${label} in the ${habitat} ${emoji} #Shorts`);
+
+    candidates.push(
+      `Wild ${label} Up Close ${emoji} #Shorts`,
+      `${label} Caught on Camera ${emoji} #Shorts`,
+      `${label} Natural Behavior ${emoji} #Shorts`,
+      `${label} Wildlife Encounter ${emoji} #Shorts`,
+      `${label} in Its Natural Habitat ${emoji} #Shorts`
+    );
+
+    const index = Math.max(0, Number(detail?.batchIndex || 0));
+    const rotated = [...candidates.slice(index % candidates.length), ...candidates.slice(0, index % candidates.length)];
+    const chosen = rotated.find(t => !used.has(t.toLowerCase())) || `${candidates[0]} ${Date.now().toString().slice(-3)}`;
+
+    return chosen.slice(0,100);
+  }
+
+  function accurateHashtags(species) {
+    const speciesTag = species
+      ? '#' + species.label.replace(/[^A-Za-z0-9]/g,'')
+      : '#Animals';
+    return [speciesTag, '#Wildlife', '#Shorts'];
+  }
+
+  function accurateTags(species, style) {
+    const tags = species?.keywords?.length
+      ? [...species.keywords]
+      : ['animals','wildlife','wild animals','animal shorts','wildlife shorts'];
+
+    if (style === 'documentary' && !tags.includes('wildlife documentary')) {
+      tags.splice(Math.min(3,tags.length),0,'wildlife documentary');
+    }
+
+    if (species?.facts?.length && !tags.includes('animal facts')) {
+      tags.splice(Math.min(3,tags.length),0,'animal facts');
+    }
+
+    return [...new Set(tags)].slice(0,8);
+  }
+
+  function channelLinks() {
+    const raw = document.querySelector('#channelSnapshot .channel-title p')?.textContent?.trim() || '';
+    let base = '';
+    if (/^@/.test(raw)) base = `https://www.youtube.com/${raw}`;
+    else if (/^UC[A-Za-z0-9_-]{20,}$/.test(raw)) base = `https://www.youtube.com/channel/${raw}`;
+    if (!base) return [];
+
+    return [
+      `More wildlife Shorts: ${base}/shorts`,
+      `Subscribe: ${base}?sub_confirmation=1`
+    ];
+  }
+
+  function makeDescription(species, action, habitat, detail, tags, hashes) {
+    const label = species?.label || 'Wild animal';
+    const verb = action ? ` ${action}` : '';
+    const place = habitat ? ` in the ${habitat}` : ' in its natural environment';
+
+    const intro = `${label}${verb}${place} in a real wildlife moment.`;
+    const educational = species?.facts?.length
+      ? `Quick wildlife fact: ${species.facts[0]}`
+      : 'Watch this real wildlife moment and observe the animal’s natural behavior.';
+
+    const sourceTitle = String(detail?.sources?.[0]?.title || '')
+      .replace(/\.[a-z0-9]{2,5}$/i,'')
+      .replace(/[_]+/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+
+    const old = String(detail?.description || '');
+    const attrIndex = old.search(/Source\s*\/?\s*attribution:/i);
+    const attribution = attrIndex >= 0
+      ? old.slice(attrIndex)
+      : (detail?.attribution ? `Source / attribution:\n${detail.attribution}` : '');
+
+    return [
+      intro,
+      educational,
+      `More ${label.toLowerCase()} videos, wildlife, wild animals and animal Shorts from Wildlife Encounters TV.`,
+      sourceTitle ? `Source clip: ${sourceTitle}.` : '',
+      ...channelLinks(),
+      hashes.join(' '),
+      attribution
+    ].filter(Boolean).join('\n\n').slice(0,5000);
+  }
+
+  function makeStory(species, action, habitat) {
+    const label = species?.label || 'wild animal';
+    const fact1 = species?.facts?.[0] || 'Wild animals adapt their behavior to the conditions around them.';
+    const fact2 = species?.facts?.[1] || 'Observing wildlife from a distance helps protect both animals and people.';
+    const place = habitat ? ` in the ${habitat}` : '';
+    const behavior = action ? ` while ${action}` : '';
+
+    return `${label}${behavior}${place}. ${fact1} ${fact2}`;
+  }
+
+  function makeCaptions(species, action, habitat) {
+    const label = species?.label || 'Wild animal';
+    const emoji = species?.emoji || '🌿';
+    const lines = [
+      `${label} ${emoji}`,
+      action ? `${action[0].toUpperCase()+action.slice(1)} in the wild` : 'A real wildlife moment',
+      species?.facts?.[0] || 'Observe the animal’s natural behavior',
+      species?.facts?.[1] || 'Wildlife worth protecting'
+    ];
+
+    if (habitat) lines[1] = `${lines[1]} • ${habitat}`;
+    return lines;
+  }
+
+  function syncFields(detail) {
+    if ($('uploadTitle')) $('uploadTitle').value = detail.title || '';
+    if ($('uploadDescription')) $('uploadDescription').value = detail.description || '';
+    if ($('uploadTags')) $('uploadTags').value = detail.tags || '';
+    if ($('seoTitle')) $('seoTitle').value = detail.title || '';
+    if ($('seoDescription')) $('seoDescription').value = detail.description || '';
+    if ($('seoTags')) $('seoTags').value = detail.tags || '';
+    if ($('seoHashtags')) $('seoHashtags').value = detail.hashtags || '';
+  }
+
+  async function makeCover(detail, species, action) {
+    const video = $('preview');
+    if (!video?.videoWidth || !video?.videoHeight) return detail?.thumbnailBlob || null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1920;
+    const ctx = canvas.getContext('2d');
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const target = 1080/1920;
+    const ratio = vw/vh;
+    let sx=0, sy=0, sw=vw, sh=vh;
+    if (ratio > target) {
+      sw = vh*target;
+      sx = (vw-sw)/2;
+    } else {
+      sh = vw/target;
+      sy = (vh-sh)/2;
+    }
+
+    ctx.filter = 'saturate(1.22) contrast(1.12) brightness(1.04)';
+    ctx.drawImage(video,sx,sy,sw,sh,0,0,1080,1920);
+    ctx.filter = 'none';
+
+    const g = ctx.createLinearGradient(0,650,0,1740);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(.48,'rgba(0,0,0,.18)');
+    g.addColorStop(1,'rgba(0,0,0,.88)');
+    ctx.fillStyle=g;
+    ctx.fillRect(0,620,1080,1120);
+
+    // Keep all copy well away from Shorts UI/crop edges.
+    const label=(species?.label || 'Wildlife').toUpperCase();
+    const sub=(action ? action.toUpperCase() : 'WILDLIFE MOMENT');
+
+    ctx.textBaseline='alphabetic';
+    ctx.shadowColor='rgba(0,0,0,.95)';
+    ctx.shadowBlur=18;
+    ctx.shadowOffsetY=4;
+
+    ctx.font='900 82px Arial, sans-serif';
+    ctx.lineWidth=14;
+    ctx.strokeStyle='rgba(0,0,0,.76)';
+    ctx.fillStyle='#fff';
+    ctx.strokeText(label,90,1330,890);
+    ctx.fillText(label,90,1330,890);
+
+    ctx.shadowBlur=0;
+    ctx.font='900 38px Arial, sans-serif';
+    ctx.fillStyle='#f2c65c';
+    ctx.fillText(sub,92,1415,890);
+
+    ctx.font='800 30px Arial, sans-serif';
+    ctx.fillStyle='#fff';
+    ctx.fillText('WILDLIFE ENCOUNTERS TV',92,1600,890);
+
+    return await new Promise(resolve => canvas.toBlob(resolve,'image/jpeg',.93));
+  }
+
+  // Make sure the one-screen selector really contains every number 1–20.
+  function ensureTwenty() {
+    const simple = $('simpleCount');
+    if (simple) {
+      for (let n=1;n<=20;n++) {
+        if (![...simple.options].some(o => Number(o.value)===n)) {
+          const opt=document.createElement('option');
+          opt.value=String(n);
+          opt.textContent=`${n} Short${n===1?'':'s'}`;
+          simple.appendChild(opt);
+        }
+      }
+    }
+    ['animalBatchCount','autoBatchCount','wizardBatchCount'].forEach(id => {
+      const select=$(id);
+      if (!select) return;
+      for (let n=1;n<=20;n++) {
+        if (![...select.options].some(o => Number(o.value)===n)) {
+          const opt=document.createElement('option');
+          opt.value=String(n);
+          opt.textContent=`${n} Short${n===1?'':'s'}`;
+          select.appendChild(opt);
+        }
+      }
+    });
+  }
+
+  ensureTwenty();
+  setTimeout(ensureTwenty,500);
+
+  // FINAL metadata/content pass. This fires after the earlier actual-species pass
+  // and before youtube.js sees the final redispatched export.
+  window.addEventListener('clipfree-export-ready', event => {
+    const detail=event.detail || {};
+    if (detail.__clipfreeGrowthFinalReady || detail.kind!=='animal-generator') return;
+
+    // Earlier species-detection pass may stop and redispatch first. Wait for that.
+    if (!detail.__clipfreeActualAnimalReady) return;
+
+    event.stopImmediatePropagation();
+
+    const species=detectSpecies(detail);
+    const text=sourceText(detail);
+    const action=detectAction(text);
+    const habitat=detectHabitat(text);
+    const style=String($('simpleStyle')?.value || $('animalStyle')?.value || '').toLowerCase();
+
+    const tags=accurateTags(species,style);
+    const hashes=accurateHashtags(species);
+    const title=makeTitle(species,action,habitat,detail);
+
+    detail.title=title;
+    detail.tags=tags.join(', ');
+    detail.hashtags=hashes.join(' ');
+    detail.description=makeDescription(species,action,habitat,detail,tags,hashes);
+    detail.story=makeStory(species,action,habitat);
+    detail.captions=makeCaptions(species,action,habitat);
+    detail.searchTopic=species ? `${species.label.toLowerCase()} wildlife` : 'wildlife';
+    detail.detectedAnimal=species?.label || detail.detectedAnimal || 'Wildlife';
+
+    syncFields(detail);
+
+    Promise.resolve(makeCover(detail,species,action))
+      .then(blob => { if (blob) detail.thumbnailBlob=blob; })
+      .catch(err => console.warn('Growth cover fallback used',err))
+      .finally(() => {
+        detail.__clipfreeGrowthFinalReady=true;
+        rememberTitle(title);
+        rememberContent(detail,title);
+        if (window.ClipFreeExport===detail) Object.assign(window.ClipFreeExport,detail);
+        window.dispatchEvent(new CustomEvent('clipfree-export-ready',{detail}));
+      });
+  }, true);
+
+  // Make the single visible screen explain exactly what happens.
+  setTimeout(() => {
+    const badge=document.querySelector('#clipfreeSimpleStudio .simple-badge');
+    if (badge) badge.textContent='GROWTH MODE • 1–20 UNIQUE WILDLIFE SHORTS';
+
+    const p=document.querySelector('#clipfreeSimpleStudio .simple-head p');
+    if (p) p.textContent=
+      'Choose the topic, style, length, amount and visibility once. ClipFree finds unused Public Domain/CC0 footage, identifies the real animal, adds an original educational hook/story, builds accurate SEO and a safe 9:16 cover, then uploads each Short one at a time.';
+
+    const box=document.querySelector('#clipfreeSimpleStudio .simple-seo-list');
+    if (box) {
+      box.innerHTML='';
+      [
+        'Unused PD/CC0 source',
+        'Actual animal detection',
+        'Original hook + facts',
+        'Unique title',
+        'Accurate description',
+        'Highest relevant keywords',
+        '8 max tags',
+        '3 hashtags',
+        '9:16 safe cover',
+        'Captions',
+        'Attribution',
+        'Duplicate history'
+      ].forEach(label => {
+        const chip=document.createElement('span');
+        chip.textContent=label;
+        box.appendChild(chip);
+      });
+    }
+
+    const note=document.querySelector('#clipfreeSimpleStudio .simple-note');
+    if (note) note.textContent=
+      'Growth Mode copies the STRUCTURE of your successful wildlife Shorts, not the same footage. It does not intentionally reuse previous sources or titles. SEO stays accurate to the actual animal/video; no unrelated high-volume keyword is inserted.';
+  },900);
+})();
