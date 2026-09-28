@@ -1353,7 +1353,7 @@ async function readUploadedVideoState(videoId, token) {
   }
 }
 
-async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=30000, intervalMs=3000} = {}) {
+async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=12000, intervalMs=3000} = {}) {
   const started = Date.now();
   let last = null;
 
@@ -1527,23 +1527,30 @@ async function uploadToYouTube(options = {}) {
     }
 
     els.uploadProgress.style.width = '96%';
+
+    // Optional finishing calls are independent, so run them together instead of
+    // making the phone wait for captions, thumbnail and playlist one-by-one.
+    const finishing = [];
     if (els.uploadCaptions.checked) {
       const srt = state.generatedExport?.srt || window.ClipFreeExport?.srt || '';
-      if (srt && result.id) {
-        setNotice(els.uploadStatus, 'Video uploaded. Adding captions…');
-        await uploadCaption(result.id, srt, token).catch(err => console.warn('Caption upload failed', err));
-      }
+      if (srt && result.id) finishing.push(
+        uploadCaption(result.id, srt, token).catch(err => console.warn('Caption upload failed', err))
+      );
     }
     if (els.uploadThumbnail?.checked) {
       const thumb = state.generatedExport?.thumbnailBlob || window.ClipFreeExport?.thumbnailBlob || null;
-      if (thumb && result.id) {
-        setNotice(els.uploadStatus, 'Adding automatic thumbnail…');
-        await uploadThumbnail(result.id, thumb, token).catch(err => console.warn('Thumbnail upload failed', err));
-      }
+      if (thumb && result.id) finishing.push(
+        uploadThumbnail(result.id, thumb, token).catch(err => console.warn('Thumbnail upload failed', err))
+      );
     }
     if (els.uploadPlaylist?.value && result.id) {
-      setNotice(els.uploadStatus, 'Adding video to playlist…');
-      await addVideoToPlaylist(result.id, els.uploadPlaylist.value).catch(err => console.warn('Playlist add failed', err));
+      finishing.push(
+        addVideoToPlaylist(result.id, els.uploadPlaylist.value).catch(err => console.warn('Playlist add failed', err))
+      );
+    }
+    if (finishing.length) {
+      setNotice(els.uploadStatus, 'Finishing captions, cover and playlist in parallel…');
+      await Promise.allSettled(finishing);
     }
     els.uploadProgress.style.width = '100%';
     const watchLink = `https://www.youtube.com/watch?v=${result.id}`;

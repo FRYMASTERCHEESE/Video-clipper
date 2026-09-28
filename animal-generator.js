@@ -259,7 +259,7 @@ async function generateAnimalShort(){
   if(running) return;
   if(!window.ClipFreeYouTube?.searchCommonsDownloadable || !window.ClipFreeAutomation?.createMontageFromFiles){ setStatus('The video tools are still loading. Wait a few seconds and try again.',0,'bad'); return; }
   running=true; generateButton.disabled=true;
-  const preset=PRESETS[activePreset] || PRESETS.lions; const style=styleSelect?.value || 'documentary'; const duration=Math.max(12,Math.min(30,Number(durationSelect?.value)||24)); const batchCount=Math.max(1,Math.min(8,Number(batchSelect?.value)||1)); const useSounds=soundsToggle?.checked!==false; const customTopic=(topicInput?.value || '').trim(); const query=customTopic || preset.query;
+  const preset=PRESETS[activePreset] || PRESETS.lions; const style=styleSelect?.value || 'documentary'; const duration=Math.max(12,Math.min(60,Number(durationSelect?.value)||30)); const batchCount=Math.max(1,Math.min(8,Number(batchSelect?.value)||1)); const useSounds=true; const customTopic=(topicInput?.value || '').trim(); const query=customTopic || preset.query;
   try{
     const varietyMode=Boolean(window.ClipFreeVarietyMode);
     setStatus(varietyMode
@@ -267,15 +267,22 @@ async function generateAnimalShort(){
       : `Finding ${batchCount} unique unused ${preset.label.toLowerCase()} videos…`,4);
     const suitable=await collectBatchSources({query,preset,batchCount,customTopic,varietyMode});
 
-    let soundItems=[]; if(useSounds){ setStatus('Finding real open-licensed animal sounds…',9); try{ soundItems=await searchCommonsAudio(preset.soundQuery || `${query} animal sound`,12); }catch(err){ console.warn('Animal audio search skipped',err); } }
+    // Every Short gets sound. Original local AI narration is the primary audio.
+    // Strict PD/CC0 animal sound is only used as a fallback if local TTS cannot run.
+    let soundItems=[];
 
     const batchMediaHashes=new Set();
+    const processingFailuresStart=Number(window.ClipFreeYouTubeProcessingState?.failed || 0);
     const persistentMediaHashes=loadMediaHashHistory();
     const blockedKeys=await blockedSourceSet();
     const reservedKeys=new Set();
     for(const item of suitable) for(const key of sourceKeys(item)) reservedKeys.add(key);
 
     for(let batchIndex=0;batchIndex<batchCount;batchIndex++){
+      const processingFailuresNow=Number(window.ClipFreeYouTubeProcessingState?.failed || 0);
+      if(processingFailuresNow>processingFailuresStart){
+        throw new Error(window.ClipFreeYouTubeProcessingState?.lastError || 'YouTube reported a real processing failure, so ClipFree stopped before uploading more videos.');
+      }
       const baseProgress=10+Math.round((batchIndex/batchCount)*84);
       setStatus(`Short ${batchIndex+1}/${batchCount}: choosing a genuinely different source video…`,baseProgress,'good');
 
@@ -325,12 +332,67 @@ async function generateAnimalShort(){
       const files=[sourceFile];
       if(sourceHash) batchMediaHashes.add(sourceHash);
 
-      let soundItem=null,audioFile=null; if(useSounds && soundItems.length){ soundItem=soundItems[batchIndex % soundItems.length]; setStatus(`Short ${batchIndex+1}/${batchCount}: adding real animal sound…`,baseProgress+9,'good'); try{ audioFile=await downloadAudio(soundItem,batchIndex); }catch(err){ console.warn('Animal sound download skipped',err); soundItem=null; } }
+      let soundItem=null,audioFile=null,voiceover=null;
 
-      setStatus(`Short ${batchIndex+1}/${batchCount}: creating vertical 9:16 video…`,baseProgress+12,'good');
+      // PRIMARY AUDIO: original AI narration generated locally in the browser.
+      if (window.ClipFreeVoiceover?.generate) {
+        setStatus(`Short ${batchIndex+1}/${batchCount}: creating original AI voiceover…`,baseProgress+8,'good');
+        try {
+          voiceover=await window.ClipFreeVoiceover.generate({
+            preset,
+            style,
+            customTopic,
+            source:chosen[0],
+            batchIndex,
+            duration
+          });
+          audioFile=voiceover?.file || null;
+        } catch (err) {
+          console.warn('Local AI narration unavailable; trying PD/CC0 animal sound fallback',err);
+          voiceover=null;
+          audioFile=null;
+        }
+      }
+
+      // FALLBACK AUDIO: strict Public Domain / CC0 animal recording.
+      if (!audioFile) {
+        setStatus(`Short ${batchIndex+1}/${batchCount}: AI voice fallback unavailable — finding PD/CC0 animal sound…`,baseProgress+9,'good');
+        try {
+          if (!soundItems.length) {
+            soundItems=await searchCommonsAudio(preset.soundQuery || `${query} animal sound`,12);
+          }
+          if (soundItems.length) {
+            soundItem=soundItems[batchIndex % soundItems.length];
+            audioFile=await downloadAudio(soundItem,batchIndex);
+          }
+        } catch (err) {
+          console.warn('PD/CC0 animal sound fallback failed',err);
+          soundItem=null;
+          audioFile=null;
+        }
+      }
+
+      // Never upload a silent Short.
+      if (!audioFile) {
+        throw new Error(`Short ${batchIndex+1}: ClipFree could not create original AI narration or find a usable PD/CC0 animal sound, so it stopped instead of uploading a silent Short.`);
+      }
+
+      setStatus(`Short ${batchIndex+1}/${batchCount}: creating vertical 9:16 video with sound…`,baseProgress+12,'good');
       const montage=await window.ClipFreeAutomation.createMontageFromFiles(files,{duration,audioFile,filename:`clipfree-${activePreset}-short-${batchIndex+1}.mp4`});
-      if(!montage.clipfreeUsedAnimalSound) soundItem=null;
       const meta=buildMeta(preset,style,customTopic,chosen,soundItem,batchIndex,duration);
+
+      if (voiceover) {
+        meta.originalVoiceover=true;
+        meta.voiceoverProvider=voiceover.provider;
+        meta.voiceoverVoice=voiceover.voice;
+        meta.voiceoverText=voiceover.text;
+        meta.audioType='original-ai-voiceover';
+        meta.realAnimalSound=false;
+        meta.attribution += `\nOriginal narration: written specifically for this Short and generated locally with Kokoro-82M / kokoro-js (Apache-2.0). No third-party music and no ClipFree watermark.`;
+      } else {
+        meta.audioType='public-domain-or-cc0-animal-sound';
+        meta.realAnimalSound=true;
+      }
       setStatus(`Short ${batchIndex+1}/${batchCount}: unique SEO + safe YouTube upload + processing check…`,baseProgress+18,'good');
       const uploadResult=await window.ClipFreeYouTube.startFullAutoWithFile(montage,meta);
       if(!uploadResult?.id) throw new Error(`Short ${batchIndex+1}: YouTube did not return a video ID, so it is not counted as uploaded.`);
@@ -345,7 +407,7 @@ async function generateAnimalShort(){
         setStatus(`Short ${batchIndex+1}/${batchCount} uploaded to YouTube with a real video ID. YouTube is still processing it in the background while ClipFree continues the batch.`,baseProgress+24,'good');
       }
     }
-    setStatus(`${batchCount} animal Short${batchCount===1?'':'s'} uploaded to YouTube with real video IDs ❤️ YouTube may still be processing some in the background.`,100,'good');
+    setStatus(`${batchCount} animal Short${batchCount===1?'':'s'} uploaded with sound ❤️ Original AI narration is used first, with strict PD/CC0 animal audio as fallback. YouTube may still be processing some in the background.`,100,'good');
   }catch(err){ console.error(err); setStatus(err?.message || String(err),0,'bad'); }
   finally{ running=false; generateButton.disabled=false; }
 }

@@ -878,7 +878,7 @@
         <div class="simple-head">
           <span class="simple-badge">ALL-IN-ONE YOUTUBE SHORTS AUTOMATION</span>
           <h1>Create <span>1–20 Shorts</span> from one screen.</h1>
-          <p>Choose the animal/topic, style, length, number of Shorts and visibility. ClipFree handles the 9:16 creation, SEO package, captions, thumbnail, attribution and YouTube upload automatically.</p>
+          <p>Choose the animal/topic, style, length, number of Shorts and visibility. ClipFree creates the 9:16 video, original AI narration, SEO package, captions, thumbnail, attribution and YouTube upload automatically.</p>
           <div id="simpleConnection" class="simple-connected"><span class="simple-dot"></span><span>Checking YouTube connection…</span></div>
         </div>
 
@@ -900,8 +900,10 @@
             <label class="simple-field"><span>Length</span>
               <select id="simpleDuration">
                 <option value="15">About 15 seconds</option>
-                <option value="24" selected>About 24 seconds</option>
-                <option value="30">About 30 seconds</option>
+                <option value="24">About 24 seconds</option>
+                <option value="30" selected>About 30 seconds</option>
+                <option value="45">About 45 seconds</option>
+                <option value="60">About 60 seconds</option>
               </select>
             </label>
 
@@ -917,10 +919,9 @@
               </select>
             </label>
 
-            <label class="simple-field"><span>Animal audio</span>
+            <label class="simple-field"><span>Audio on every Short</span>
               <select id="simpleSounds">
-                <option value="on" selected>Automatic real open-licensed sounds</option>
-                <option value="off">No added animal sound</option>
+                <option value="on" selected>Original AI voiceover • PD/CC0 sound fallback</option>
               </select>
             </label>
 
@@ -929,6 +930,7 @@
               <div class="simple-seo-list">
                 <span>Unique title</span><span>Description</span><span>Tags</span><span>Hashtags</span>
                 <span>9:16 Short</span><span>Captions</span><span>Thumbnail</span><span>Attribution</span>
+                <span>Original AI voiceover</span><span>No app watermark</span><span>Single-pass encode</span><span>Adaptive HD quality</span>
                 <span>Pets & Animals</span><span>Channel CTA</span>
               </div>
             </div>
@@ -1006,10 +1008,10 @@
   function syncSimpleToEngine() {
     const topic = TOPICS[$('simpleTopic')?.value] || TOPICS.wildlife;
     const style = $('simpleStyle')?.value || 'documentary';
-    const duration = $('simpleDuration')?.value || '24';
+    const duration = $('simpleDuration')?.value || '30';
     const count = $('simpleCount')?.value || '1';
     const privacy = $('simplePrivacy')?.value || 'public';
-    const sounds = $('simpleSounds')?.value !== 'off';
+    const sounds = true;
     const rights = Boolean($('simpleRights')?.checked);
     window.ClipFreeVarietyMode = $('simpleTopic')?.value === 'wildlife';
 

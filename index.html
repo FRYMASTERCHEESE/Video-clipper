@@ -271,8 +271,10 @@
             <label><span>Target length</span>
               <select id="animalDuration">
                 <option value="15">About 15 seconds</option>
-                <option value="24" selected>About 24 seconds</option>
-                <option value="30">About 30 seconds</option>
+                <option value="24">About 24 seconds</option>
+                <option value="30" selected>About 30 seconds</option>
+                <option value="45">About 45 seconds</option>
+                <option value="60">About 60 seconds</option>
               </select>
             </label>
             <label><span>How many Shorts in this batch?</span>
@@ -281,7 +283,7 @@
                 <option value="5">5 Shorts</option><option value="6">6 Shorts</option><option value="7">7 Shorts</option><option value="8">8 Shorts</option>
               </select>
             </label>
-            <label class="checkline"><input id="animalSounds" type="checkbox" checked /> Add real open-licensed animal sounds automatically when a suitable recording is available</label>
+            <label class="checkline"><input id="animalSounds" type="checkbox" checked disabled /> Every Short gets sound: original local AI voiceover first, strict PD/CC0 animal audio fallback</label>
             <button id="generateAnimalVideo" class="primary big-auto-button" type="button">✨ Generate + upload animal Shorts</button>
             <div id="animalGeneratorStatus" class="notice subtle">Choose 1–8. ClipFree creates each vertical 9:16 Short one at a time, adds SEO, story captions, thumbnail, attribution and real animal audio when available, then uploads automatically.</div>
             <div class="progress"><div id="animalGeneratorProgress"></div></div>
@@ -655,13 +657,15 @@
   <footer>ClipFree AI • Uses YouTube API Services • Automatic clipping + YouTube workflow tools • No watermark added by the app<br><a href="privacy.html">Privacy Policy</a> • <a href="terms.html">Terms of Service</a> • <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a> • <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></footer>
 
   <script type="module" src="app.js?v=20260929-max4"></script>
-  <script type="module" src="youtube.js?v=20260929-max4"></script>
-  <script type="module" src="animal-generator.js?v=20260929-max4"></script>
+  <script type="module" src="video-engine-v7.js?v=20260929-speedquality7"></script>
+  <script type="module" src="youtube.js?v=20260929-speedquality7"></script>
+  <script type="module" src="ai-voiceover.js?v=20260929-speedquality7"></script>
+  <script type="module" src="animal-generator.js?v=20260929-speedquality7"></script>
   <script type="module" src="site.js?v=20260929-max4"></script>
   <script type="module" src="premium-auto.js?v=20260929-max4"></script>
-  <script type="module" src="originality-guard.js?v=20260929-max4"></script>
-  <script type="module" src="category-pages.js?v=20260929-max4"></script>
-  <script type="module" src="upload-speed-boost.js?v=20260929-max4"></script>
+  <script type="module" src="originality-lite-v7.js?v=20260929-speedquality7"></script>
+  <script type="module" src="category-pages.js?v=20260929-speedquality7"></script>
+  <script type="module" src="upload-speed-boost.js?v=20260929-speedquality7"></script>
   <script>
     (() => {
       const demoConnect = document.getElementById('demoConnectYoutube');
