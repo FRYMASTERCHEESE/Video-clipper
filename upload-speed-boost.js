@@ -473,8 +473,127 @@
     'Living Wild'
   ];
 
+  const ACTIONS = [
+    ['Drinking', /\b(drink|drinking|waterhole|watering|water hole)\b/i],
+    ['Roaming', /\b(roam|roaming|wandering)\b/i],
+    ['Walking', /\b(walk|walking)\b/i],
+    ['Running', /\b(run|running|sprinting)\b/i],
+    ['Swimming', /\b(swim|swimming)\b/i],
+    ['Feeding', /\b(feed|feeding|eating|grazing|browsing)\b/i],
+    ['Resting', /\b(rest|resting|sleeping|relaxing)\b/i],
+    ['Playing', /\b(play|playing)\b/i],
+    ['Crossing', /\b(cross|crossing)\b/i],
+    ['Climbing', /\b(climb|climbing)\b/i],
+    ['Flying', /\b(fly|flying|soaring)\b/i],
+    ['Hunting', /\b(hunt|hunting|stalking)\b/i],
+    ['Calling', /\b(call|calling|howl|howling|roar|roaring)\b/i]
+  ];
+
+  const HABITATS = [
+    ['African Savanna', /\b(savanna|savannah)\b/i],
+    ['Forest', /\b(forest|woodland|woods)\b/i],
+    ['Wetland', /\b(wetland|marsh|swamp)\b/i],
+    ['Desert', /\b(desert|arid)\b/i],
+    ['Grassland', /\b(grassland|prairie|steppe)\b/i],
+    ['River', /\b(river|stream)\b/i],
+    ['Lake', /\blake\b/i],
+    ['Ocean', /\b(ocean|sea|marine)\b/i],
+    ['Mountains', /\b(mountain|alpine)\b/i],
+    ['Coast', /\b(coast|coastal|shore|beach)\b/i],
+    ['Arctic', /\b(arctic|tundra|ice)\b/i]
+  ];
+
+  function sourceTextForSeo(detail = {}) {
+    const topSources = Array.isArray(detail.sources) ? detail.sources : [];
+    const innerSources = Array.isArray(detail.source?.sources) ? detail.source.sources : [];
+    return [
+      detail.detectedAnimal,
+      detail.searchTopic,
+      detail.source?.detectedAnimal,
+      detail.source?.searchTopic,
+      ...topSources.map(x => `${x?.title || ''} ${x?.sourceUrl || ''}`),
+      ...innerSources.map(x => `${x?.title || ''} ${x?.sourceUrl || ''}`)
+    ].filter(Boolean).join(' ');
+  }
+
+  function detectActionForSeo(detail = {}) {
+    const text = sourceTextForSeo(detail);
+    return ACTIONS.find(([, re]) => re.test(text))?.[0] || '';
+  }
+
+  function detectHabitatForSeo(detail = {}) {
+    const text = sourceTextForSeo(detail);
+    return HABITATS.find(([, re]) => re.test(text))?.[0] || '';
+  }
+
+  function titleEmoji(label) {
+    const value = String(label || '').toLowerCase();
+    if (/mountain lion|cougar|puma/.test(value)) return '🐾';
+    if (/lion/.test(value)) return '🦁';
+    if (/tiger/.test(value)) return '🐅';
+    if (/leopard|cheetah/.test(value)) return '🐆';
+    if (/wolf|coyote/.test(value)) return '🐺';
+    if (/fox/.test(value)) return '🦊';
+    if (/bear/.test(value)) return '🐻';
+    if (/elephant/.test(value)) return '🐘';
+    if (/giraffe/.test(value)) return '🦒';
+    if (/zebra/.test(value)) return '🦓';
+    if (/moose/.test(value)) return '🫎';
+    if (/deer|elk/.test(value)) return '🦌';
+    if (/bison|buffalo/.test(value)) return '🐃';
+    if (/crocodile|alligator/.test(value)) return '🐊';
+    if (/eagle/.test(value)) return '🦅';
+    if (/owl/.test(value)) return '🦉';
+    if (/shark/.test(value)) return '🦈';
+    if (/whale/.test(value)) return '🐋';
+    if (/dolphin/.test(value)) return '🐬';
+    if (/seal|sea lion/.test(value)) return '🦭';
+    return '🌿';
+  }
+
+  function normalizedLabel(detail = {}) {
+    const label = animalLabel(detail);
+    return label === 'Wildlife' ? 'Wild Animal' : label;
+  }
+
+  function titleCandidates(detail = {}) {
+    const label = normalizedLabel(detail);
+    const emoji = titleEmoji(label);
+    const action = detectActionForSeo(detail);
+    const habitat = detectHabitatForSeo(detail);
+    const candidates = [];
+
+    if (action && habitat) {
+      candidates.push(
+        `${label} ${action} in the ${habitat} ${emoji} #Shorts`,
+        `Watch This ${label} ${action} in the ${habitat} ${emoji} #Shorts`,
+        `${label} ${action}: A Wild Moment in the ${habitat} ${emoji} #Shorts`
+      );
+    }
+
+    if (action) {
+      candidates.push(
+        `${label} ${action} in the Wild ${emoji} #Shorts`,
+        `Wild ${label} ${action} Caught on Camera ${emoji} #Shorts`
+      );
+    }
+
+    if (habitat) {
+      candidates.push(
+        `Wild ${label} in the ${habitat} ${emoji} #Shorts`,
+        `${label} Exploring the ${habitat} ${emoji} #Shorts`,
+        `A ${label} Moment From the ${habitat} ${emoji} #Shorts`
+      );
+    }
+
+    for (const variant of TITLE_VARIANTS) {
+      candidates.push(`${label} ${variant} ${emoji} #Shorts`);
+    }
+
+    return [...new Set(candidates.map(x => x.replace(/\s+/g, ' ').trim().slice(0, 100)))];
+  }
+
   function uniqueFinalTitle(detail = {}) {
-    const current = String(detail.title || '').trim();
     const local = loadJson(TITLE_HISTORY_KEY, []);
     const known = window.ClipFreeYouTube?.getKnownVideoTitles?.() || [];
     const used = new Set(
@@ -483,59 +602,154 @@
         .filter(Boolean)
     );
 
-    if (current && !used.has(current.toLowerCase())) {
-      local.unshift(current);
-      saveJson(TITLE_HISTORY_KEY, [...new Set(local)].slice(0, 600));
-      return current;
-    }
+    // Never keep the old generic Discovery Optimizer title.
+    const blockedGeneric = /\bLions in the Wild:\s*Amazing Wildlife Moment\b/i;
+    const candidates = titleCandidates(detail).filter(x => !blockedGeneric.test(x));
 
-    const label = animalLabel(detail);
     let cursor = Number(localStorage.getItem(TITLE_CURSOR_KEY) || 0);
     if (!Number.isFinite(cursor) || cursor < 0) cursor = 0;
-    const batchIndex = Math.max(0, Number(detail.batchIndex ?? detail.source?.batchIndex ?? 0));
 
-    for (let offset = 0; offset < TITLE_VARIANTS.length; offset++) {
-      const variant = TITLE_VARIANTS[(cursor + batchIndex + offset) % TITLE_VARIANTS.length];
-      const candidate = `${label} ${variant} #Shorts`.slice(0, 100);
+    const batchIndex = Math.max(0, Number(detail.batchIndex ?? detail.source?.batchIndex ?? 0));
+    const start = (cursor + batchIndex) % Math.max(1, candidates.length);
+
+    for (let offset = 0; offset < candidates.length; offset++) {
+      const candidate = candidates[(start + offset) % candidates.length];
       if (!used.has(candidate.toLowerCase())) {
         try {
           localStorage.setItem(
             TITLE_CURSOR_KEY,
-            String((cursor + offset + 1) % TITLE_VARIANTS.length)
+            String((start + offset + 1) % Math.max(1, candidates.length))
           );
         } catch {}
 
         local.unshift(candidate);
-        saveJson(TITLE_HISTORY_KEY, [...new Set(local)].slice(0, 600));
+        saveJson(TITLE_HISTORY_KEY, [...new Set(local)].slice(0, 1000));
         return candidate;
       }
     }
 
+    const label = normalizedLabel(detail);
+    const emoji = titleEmoji(label);
     const suffix = new Date().toISOString().replace(/\D/g, '').slice(-8);
-    const fallback = `${label} Wildlife Encounter ${suffix} #Shorts`.slice(0, 100);
+    const fallback = `${label} Wildlife Encounter ${emoji} ${suffix} #Shorts`.slice(0, 100);
     local.unshift(fallback);
-    saveJson(TITLE_HISTORY_KEY, [...new Set(local)].slice(0, 600));
+    saveJson(TITLE_HISTORY_KEY, [...new Set(local)].slice(0, 1000));
     return fallback;
   }
 
+  function finalTags(detail = {}) {
+    const label = normalizedLabel(detail);
+    const species = label.toLowerCase();
+    const tags = [
+      species,
+      `${species} wildlife`,
+      'wildlife',
+      'wild animals',
+      'animal shorts',
+      'wildlife shorts',
+      'animals'
+    ];
+
+    if (/lion|tiger|leopard|cheetah|mountain lion|cougar|puma/i.test(label)) {
+      tags.push('big cats');
+    }
+    if (/shark|whale|dolphin|seal|sea lion/i.test(label)) {
+      tags.push('ocean wildlife');
+    }
+
+    return [...new Set(tags)].slice(0, 8);
+  }
+
+  function finalHashtags(detail = {}) {
+    const label = normalizedLabel(detail);
+    const speciesHash = '#' + label.replace(/[^A-Za-z0-9]+/g, '');
+    return [speciesHash || '#Animals', '#Wildlife', '#Shorts'].slice(0, 3);
+  }
+
+  function sourceAttribution(detail = {}) {
+    const existing = String(detail.attribution || detail.source?.attribution || '').trim();
+    if (existing) return existing;
+
+    const sources = [
+      ...(Array.isArray(detail.sources) ? detail.sources : []),
+      ...(Array.isArray(detail.source?.sources) ? detail.source.sources : [])
+    ];
+
+    const first = sources[0] || {};
+    if (!first.title && !first.sourceUrl) return '';
+
+    return [
+      first.title ? `Source: ${first.title}` : '',
+      first.creator ? `Creator: ${first.creator}` : '',
+      first.license ? `Rights: ${first.license}` : '',
+      first.sourceUrl || ''
+    ].filter(Boolean).join(' • ');
+  }
+
+  function finalDescription(detail, title, tags, hashes) {
+    const label = normalizedLabel(detail);
+    const action = detectActionForSeo(detail);
+    const habitat = detectHabitatForSeo(detail);
+
+    const first = action && habitat
+      ? `${label} ${action.toLowerCase()} in the ${habitat} in this real wildlife Short.`
+      : action
+        ? `${label} ${action.toLowerCase()} in the wild in this real wildlife Short.`
+        : habitat
+          ? `Watch a wild ${label.toLowerCase()} in the ${habitat} in this wildlife Short.`
+          : `Watch a real ${label.toLowerCase()} wildlife moment in this Short.`;
+
+    const second = `See more ${label.toLowerCase()} wildlife, wild animals and nature moments from Wildlife Encounters TV.`;
+    const keywordLine = `Related topics: ${tags.slice(0, 6).join(', ')}.`;
+    const attribution = sourceAttribution(detail);
+
+    return [
+      first,
+      second,
+      keywordLine,
+      hashes.join(' '),
+      attribution ? `Source / attribution:\n${attribution}` : ''
+    ].filter(Boolean).join('\n\n').slice(0, 5000);
+  }
+
   function installTitleGuard() {
-    if (window.__clipfreeFinalTitleGuardV21) return;
-    window.__clipfreeFinalTitleGuardV21 = true;
+    if (window.__clipfreeFinalTitleGuardV22) return;
+    window.__clipfreeFinalTitleGuardV22 = true;
 
     window.addEventListener('clipfree-export-ready', event => {
       const detail = event.detail || {};
       if (detail.kind !== 'animal-generator') return;
       if (!detail.__clipfreeGrowthFinalReady) return;
-      if (detail.__clipfreeFinalTitleGuardReadyV21) return;
+      if (detail.__clipfreeFinalSeoGuardReadyV22) return;
 
+      // site.js runs earlier in capture phase and can put its old generic title
+      // back. This FINAL guard runs after it and restores the Growth Engine's
+      // actual-animal, unique SEO metadata before youtube.js reads the event.
       const title = uniqueFinalTitle(detail);
+      const tags = finalTags(detail);
+      const hashes = finalHashtags(detail);
+      const description = finalDescription(detail, title, tags, hashes);
+
       detail.title = title;
+      detail.description = description;
+      detail.tags = tags.join(', ');
+      detail.hashtags = hashes.join(' ');
+      detail.__clipfreeFinalSeoGuardReadyV22 = true;
 
       if ($('uploadTitle')) $('uploadTitle').value = title;
+      if ($('uploadDescription')) $('uploadDescription').value = description;
+      if ($('uploadTags')) $('uploadTags').value = detail.tags;
       if ($('seoTitle')) $('seoTitle').value = title;
-      if (window.ClipFreeExport === detail) window.ClipFreeExport.title = title;
+      if ($('seoDescription')) $('seoDescription').value = description;
+      if ($('seoTags')) $('seoTags').value = detail.tags;
+      if ($('seoHashtags')) $('seoHashtags').value = detail.hashtags;
 
-      detail.__clipfreeFinalTitleGuardReadyV21 = true;
+      if (window.ClipFreeExport === detail) {
+        window.ClipFreeExport.title = title;
+        window.ClipFreeExport.description = description;
+        window.ClipFreeExport.tags = detail.tags;
+        window.ClipFreeExport.hashtags = detail.hashtags;
+      }
     }, true);
   }
 
@@ -637,8 +851,8 @@
 
     window.CLIPFREE_UPLOAD_SPEED_BOOST = {
       enabled:true,
-      version:'2.1',
-      mode:'validated-fast-upload-safe-fallback-visual-dedupe'
+      version:'2.2',
+      mode:'validated-fast-upload-safe-fallback-visual-dedupe-final-seo'
     };
 
     const badge = document.querySelector('#clipfreeSimpleStudio .simple-badge');
