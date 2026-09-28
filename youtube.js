@@ -1342,7 +1342,7 @@ async function xhrUpload(url, body, token, onProgress) {
 async function readUploadedVideoState(videoId, token) {
   if(!videoId) return null;
   try{
-    const url=ytUrl('videos',{part:'snippet,status',id:videoId,maxResults:1});
+    const url=ytUrl('videos',{part:'snippet,status,processingDetails',id:videoId,maxResults:1});
     const response=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
     const data=await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(data?.error?.message || 'Could not verify uploaded video status.');
@@ -1351,6 +1351,28 @@ async function readUploadedVideoState(videoId, token) {
     console.warn('Upload status verification skipped',err);
     return null;
   }
+}
+
+async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=90000, intervalMs=3000} = {}) {
+  const started = Date.now();
+  let last = null;
+
+  while (Date.now() - started < maxWaitMs) {
+    last = await readUploadedVideoState(videoId, token);
+    const processing = String(last?.processingDetails?.processingStatus || '').toLowerCase();
+    const failure = String(last?.processingDetails?.processingFailureReason || '').trim();
+
+    if (processing === 'succeeded') return { status:'succeeded', video:last };
+    if (processing === 'failed' || processing === 'terminated') {
+      const reason = failure ? ` (${failure})` : '';
+      throw new Error(`YouTube received the upload but could not process the video file${reason}. ClipFree stopped the batch so it will not upload more broken Shorts.`);
+    }
+
+    // Newly inserted videos can take a few seconds before processingDetails appears.
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+
+  return { status:'pending', video:last };
 }
 
 async function uploadToYouTube(options = {}) {
@@ -1399,6 +1421,19 @@ async function uploadToYouTube(options = {}) {
       if (state.autoUploadQueued) setAutoStatus('Uploading to YouTube', 80 + Math.round(p * 18), `Upload ${Math.round(p * 100)}% complete…`, 'good');
     });
     if (!result?.id) throw new Error('YouTube accepted the request but did not return a video ID. The upload is not counted as successful.');
+
+    setNotice(els.uploadStatus, 'Upload transferred. Waiting for YouTube to verify that the video file can be processed…');
+    if (state.autoUploadQueued) {
+      setAutoStatus('YouTube processing check', 96, 'The upload reached YouTube. ClipFree is waiting for YouTube to confirm the MP4 is processable before counting it as successful…', 'good');
+    }
+
+    const processingCheck = await waitForYouTubeProcessing(result.id, token);
+    result.processingStatus = processingCheck.status;
+    if (processingCheck.status !== 'succeeded') {
+      result.processingPending = true;
+      throw new Error('YouTube received the Short but it is still processing after 90 seconds. ClipFree stopped the batch and did NOT count it as confirmed. Check YouTube Studio before retrying so you do not create a duplicate.');
+    }
+
     els.uploadProgress.style.width = '96%';
     if (els.uploadCaptions.checked) {
       const srt = state.generatedExport?.srt || window.ClipFreeExport?.srt || '';
@@ -1429,7 +1464,7 @@ async function uploadToYouTube(options = {}) {
     if(requestedPrivacy === 'public' && actualPrivacy === 'private'){
       els.uploadStatus.innerHTML = `Upload confirmed, but YouTube returned <strong>Private</strong> even though ClipFree requested <strong>Public</strong>. This is consistent with YouTube's API-project compliance restriction. ClipFree cannot override that restriction; Public API uploads become available after YouTube lifts it for the project. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video</a>.`;
     }else{
-      els.uploadStatus.innerHTML = `Upload complete as <strong>${esc(actualPrivacy)}</strong>. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>.`;
+      els.uploadStatus.innerHTML = `Upload processed successfully by YouTube as <strong>${esc(actualPrivacy)}</strong>. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>.`;
     }
 
     try {

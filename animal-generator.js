@@ -331,7 +331,7 @@ async function generateAnimalShort(){
       const montage=await window.ClipFreeAutomation.createMontageFromFiles(files,{duration,audioFile,filename:`clipfree-${activePreset}-short-${batchIndex+1}.mp4`});
       if(!montage.clipfreeUsedAnimalSound) soundItem=null;
       const meta=buildMeta(preset,style,customTopic,chosen,soundItem,batchIndex,duration);
-      setStatus(`Short ${batchIndex+1}/${batchCount}: unique SEO title, captions, thumbnail + YouTube upload…`,baseProgress+18,'good');
+      setStatus(`Short ${batchIndex+1}/${batchCount}: unique SEO + safe YouTube upload + processing check…`,baseProgress+18,'good');
       const uploadResult=await window.ClipFreeYouTube.startFullAutoWithFile(montage,meta);
       if(!uploadResult?.id) throw new Error(`Short ${batchIndex+1}: YouTube did not return a video ID, so it is not counted as uploaded.`);
       rememberSource(source);
@@ -339,7 +339,7 @@ async function generateAnimalShort(){
         rememberMediaHash(sourceHash);
         persistentMediaHashes.add(sourceHash);
       }
-      setStatus(`Short ${batchIndex+1}/${batchCount} confirmed on YouTube. Footage fingerprint + source permanently added to no-repeat history.`,baseProgress+24,'good');
+      setStatus(`Short ${batchIndex+1}/${batchCount} processed successfully on YouTube. Footage fingerprint + source permanently added to no-repeat history.`,baseProgress+24,'good');
     }
     setStatus(`${batchCount} animal Short${batchCount===1?'':'s'} confirmed on YouTube ❤️`,100,'good');
   }catch(err){ console.error(err); setStatus(err?.message || String(err),0,'bad'); }

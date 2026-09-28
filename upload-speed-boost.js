@@ -603,8 +603,8 @@
     );
 
     // Never keep the old generic Discovery Optimizer title.
-    const blockedGeneric = /\bLions in the Wild:\s*Amazing Wildlife Moment\b/i;
-    const candidates = titleCandidates(detail).filter(x => !blockedGeneric.test(x));
+    const blockedGeneric = /(?:\bLions in the Wild\b|\bWild Lions:\s*Nature Moment\b|\bAmazing Wildlife Moment\b)/i;
+    const candidates = titleCandidates(detail).filter(x => !blockedGeneric.test(x) && !used.has(x.toLowerCase()));
 
     let cursor = Number(localStorage.getItem(TITLE_CURSOR_KEY) || 0);
     if (!Number.isFinite(cursor) || cursor < 0) cursor = 0;
@@ -713,14 +713,14 @@
   }
 
   function installTitleGuard() {
-    if (window.__clipfreeFinalTitleGuardV22) return;
-    window.__clipfreeFinalTitleGuardV22 = true;
+    if (window.__clipfreeFinalTitleGuardMAX4) return;
+    window.__clipfreeFinalTitleGuardMAX4 = true;
 
     window.addEventListener('clipfree-export-ready', event => {
       const detail = event.detail || {};
       if (detail.kind !== 'animal-generator') return;
       if (!detail.__clipfreeGrowthFinalReady) return;
-      if (detail.__clipfreeFinalSeoGuardReadyV22) return;
+      if (detail.__clipfreeFinalSeoGuardReadyMAX4) return;
 
       // site.js runs earlier in capture phase and can put its old generic title
       // back. This FINAL guard runs after it and restores the Growth Engine's
@@ -734,7 +734,7 @@
       detail.description = description;
       detail.tags = tags.join(', ');
       detail.hashtags = hashes.join(' ');
-      detail.__clipfreeFinalSeoGuardReadyV22 = true;
+      detail.__clipfreeFinalSeoGuardReadyMAX4 = true;
 
       if ($('uploadTitle')) $('uploadTitle').value = title;
       if ($('uploadDescription')) $('uploadDescription').value = description;
@@ -812,52 +812,23 @@
   function patchAutomation() {
     const automation = window.ClipFreeAutomation;
     if (!automation?.loadVideoFile) return false;
-    if (automation[PATCH_FLAG]) return true;
+    if (automation.__clipfreeMaxSafeModeV4) return true;
 
-    const originalLoadVideoFile = automation.loadVideoFile.bind(automation);
-
-    automation.loadVideoFile = async function fastSafeLoad(file, meta = null, autoStart = true) {
-      const isRenderedAnimalMontage = Boolean(
-        autoStart &&
-        file &&
-        meta?.kind === 'animal-generator' &&
-        /video\/(mp4|webm|ogg)/i.test(String(file.type || 'video/mp4'))
-      );
-
-      if (!isRenderedAnimalMontage) {
-        return originalLoadVideoFile(file, meta, autoStart);
-      }
-
-      setStatus('Checking finished video before YouTube upload…');
-      const health = await inspectRenderedVideo(file);
-
-      if (!health.ok) {
-        setStatus(`Safe path: ${health.reason}. Re-encoding once before upload…`);
-        return originalLoadVideoFile(file, meta, true);
-      }
-
-      setStatus(`⚡ Healthy ${Math.round(health.duration)}s video confirmed — using fast upload path…`);
-
-      await originalLoadVideoFile(file, meta, false);
-      await waitForPreviewReady();
-
-      const detail = buildFastExport(file, meta || {});
-      window.ClipFreeExport = detail;
-      window.dispatchEvent(new CustomEvent('clipfree-export-ready', { detail }));
-      return detail;
-    };
-
-    automation[PATCH_FLAG] = true;
-
+    // MAX SAFE MODE deliberately DOES NOT bypass ClipFree's normal final FFmpeg
+    // export. The earlier direct-fast-upload path was faster, but YouTube could
+    // accept the upload request and later show “Can’t process file”. Reliability
+    // now wins: one normal final H.264/AAC export, then YouTube processing is
+    // verified before the Short is counted as confirmed.
+    automation.__clipfreeMaxSafeModeV4 = true;
     window.CLIPFREE_UPLOAD_SPEED_BOOST = {
-      enabled:true,
-      version:'2.2',
-      mode:'validated-fast-upload-safe-fallback-visual-dedupe-final-seo'
+      enabled:false,
+      safeMode:true,
+      version:'4.0',
+      mode:'max-reliability-final-encode-plus-processing-verification'
     };
 
     const badge = document.querySelector('#clipfreeSimpleStudio .simple-badge');
-    if (badge) badge.textContent = 'GROWTH MODE • FAST + SAFE • NO DUPLICATE FOOTAGE';
-
+    if (badge) badge.textContent = 'MAX MODE • UNIQUE SEO • SAFE YOUTUBE UPLOAD';
     return true;
   }
 

@@ -3003,11 +3003,11 @@
   // Make the single visible screen explain exactly what happens.
   setTimeout(() => {
     const badge=document.querySelector('#clipfreeSimpleStudio .simple-badge');
-    if (badge) badge.textContent='GROWTH MODE • 1–20 UNIQUE WILDLIFE SHORTS';
+    if (badge) badge.textContent='MAX MODE • 1–20 UNIQUE WILDLIFE SHORTS';
 
     const p=document.querySelector('#clipfreeSimpleStudio .simple-head p');
     if (p) p.textContent=
-      'Choose the topic, style, length, amount and visibility once. ClipFree finds unused Public Domain/CC0 footage, identifies the real animal, adds an original educational hook/story, builds accurate SEO and a safe 9:16 cover, then uploads each Short one at a time.';
+      'Choose the topic, style, length, amount and visibility once. ClipFree finds unused Public Domain/CC0 footage, identifies the real animal, rejects repeated sources, builds a unique SEO package and 9:16 cover, uploads one at a time, then waits for YouTube processing confirmation before counting a Short as successful.';
 
     const box=document.querySelector('#clipfreeSimpleStudio .simple-seo-list');
     if (box) {
