@@ -1,0 +1,105 @@
+ClipFree AI — FULL BUG AUDIT + FIX
+29 September 2026
+
+FILES REVIEWED
+- index.html
+- app.js
+- youtube.js
+- animal-generator.js
+- site.js
+- premium-auto.js
+- originality-guard.js
+- category-pages.js
+- ffmpeg-worker.js
+- ffmpeg-const.js
+- ffmpeg-errors.js
+- styles.css
+- privacy.html / terms.html structure
+
+FILES THAT NEED REPLACING
+1. category-pages.js
+2. animal-generator.js
+3. youtube.js
+
+VERIFIED BUGS FIXED
+1. FALSE 8/20 SUCCESS COUNTER
+   The old 20-Short controller added an entire chunk (for example 8) to the
+   counter when the internal round ended. That was not proof that YouTube had
+   accepted 8 uploads. It now counts only Shorts that return a real YouTube
+   video ID.
+
+2. CROSS-RUN COUNTER BUG
+   The old Simple Studio could compare against a cumulative confirmation total
+   from previous runs. A new run now uses its own confirmation baseline.
+
+3. "FINISHED" COULD MEAN RENDERED, NOT UPLOADED
+   Status wording now says CONFIRMED on YouTube only after a video ID exists.
+
+4. UPLOAD RESPONSE WAS NOT STRICTLY VERIFIED
+   youtube.js now rejects a result without a YouTube video ID instead of
+   continuing as if the upload succeeded.
+
+5. AUTOMATION COULD HIDE VALIDATION ERRORS
+   Missing-media / missing-title failures now throw to FULL AUTO callers when
+   rethrow mode is enabled, instead of only showing an alert.
+
+6. TOO MANY REDUNDANT EXPORT PASSES
+   category-pages.js had several older SEO/thumbnail listeners that had been
+   superseded by Growth Engine but still paused/re-dispatched the same export
+   event. These old passes are now bypassed while Growth Engine is active.
+   The final Growth Engine owns animal detection, SEO and the safe cover.
+
+7. GROWTH ENGINE DEPENDED ON AN OLDER LISTENER
+   The final Growth Engine no longer waits for the older actual-animal pass.
+   It performs its own species detection from source metadata.
+
+8. MULTIPLE UNRELATED SOURCE VIDEOS IN ONE SHORT
+   animal-generator.js used up to three source videos for each Short. That
+   increased render time and could mix different animals. Each Short now uses
+   one unique source video.
+
+9. SOURCE REUSE INSIDE A BATCH
+   The old modulo selection could wrap around and reuse footage. The generator
+   now requires enough unique source videos or stops with a clear message.
+
+10. UPLOAD SUCCESS WAS NOT CHECKED IN THE GENERATOR
+    Each Short now requires uploadResult.id before the next Short starts.
+
+11. STRICT-RIGHTS AUDIO WAS TOO PERMISSIVE
+    Animal audio used to accept CC BY as well as Public Domain/CC0. In strict
+    rights mode it now accepts Public Domain / CC0 / Public Domain Mark only.
+
+12. PUBLIC VISIBILITY DEFAULT
+    Growth Mode and YouTube automatic settings now default to Public, matching
+    the requested publishing workflow. YouTube may still force API uploads to
+    Private while the separate YouTube Data API compliance review is pending.
+
+13. CONFUSING VERIFICATION MESSAGE
+    The upload completion message no longer describes OAuth verification and
+    YouTube Data API compliance as if they were the same review.
+
+14. CONFIRMED-UPLOAD DIAGNOSTIC EVENT
+    youtube.js now emits a confirmed-upload event with the YouTube video ID,
+    final requested privacy setting and title after a successful insert.
+
+IMPORTANT EXTERNAL LIMITS
+- Google OAuth verification and the YouTube Data API compliance audit are
+  separate. Code cannot bypass YouTube's API visibility restrictions.
+- If the YouTube Data API compliance review is still pending, YouTube may force
+  an API-uploaded video to Private even when ClipFree requests Public.
+- Browser/CDN/network failures and device speed cannot be eliminated by code,
+  but this update removes avoidable duplicate processing and false success
+  reporting.
+- Public Domain/CC0 metadata reduces licensing risk, but no automated metadata
+  check can guarantee that every source frame contains no embedded logo/text.
+
+FINAL TESTS
+- JavaScript syntax — category-pages.js: PASS
+- JavaScript syntax — animal-generator.js: PASS
+- JavaScript syntax — youtube.js: PASS
+
+RECOMMENDED FIRST TEST
+Run exactly 1 Short first.
+Success now means the screen says 1/1 CONFIRMED on YouTube and YouTube returned
+a real video ID. Then check YouTube Studio > Content. If the API audit forces
+it Private, the video will still be in Studio even though it is not public.

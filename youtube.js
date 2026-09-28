@@ -28,7 +28,7 @@ const SCOPES = [
 ].join(' ');
 
 const state = {
-  settings: { clientId: '', apiKey: '', autoPrivacy: 'private' },
+  settings: { clientId: '', apiKey: '', autoPrivacy: 'public' },
   accessToken: '',
   expiresAt: 0,
   channel: null,
@@ -64,7 +64,7 @@ function setAutoStatus(text, progress = null, detail = null, type = 'subtle') {
 }
 
 function autoPrivacyValue() {
-  const value = els.autoPrivacy?.value || state.settings.autoPrivacy || 'private';
+  const value = els.autoPrivacy?.value || state.settings.autoPrivacy || 'public';
   return ['private','unlisted','public'].includes(value) ? value : 'private';
 }
 
@@ -178,11 +178,11 @@ function loadSettings() {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     state.settings.clientId = parsed.clientId || '';
     state.settings.apiKey = parsed.apiKey || '';
-    state.settings.autoPrivacy = ['private','unlisted','public'].includes(parsed.autoPrivacy) ? parsed.autoPrivacy : 'private';
+    state.settings.autoPrivacy = ['private','unlisted','public'].includes(parsed.autoPrivacy) ? parsed.autoPrivacy : 'public';
   } catch {}
   els.clientId.value = state.settings.clientId;
   els.apiKey.value = state.settings.apiKey;
-  if (els.autoPrivacy) els.autoPrivacy.value = state.settings.autoPrivacy || 'private';
+  if (els.autoPrivacy) els.autoPrivacy.value = state.settings.autoPrivacy || 'public';
   updateSettingsStatus();
   renderUploadQueue();
 }
@@ -233,10 +233,10 @@ els.runDiagnostics.addEventListener('click', async () => {
 
 els.clearSettings.addEventListener('click', () => {
   localStorage.removeItem(STORAGE_KEY);
-  state.settings = { clientId: '', apiKey: '', autoPrivacy: 'private' };
+  state.settings = { clientId: '', apiKey: '', autoPrivacy: 'public' };
   els.clientId.value = '';
   els.apiKey.value = '';
-  if (els.autoPrivacy) els.autoPrivacy.value = 'private';
+  if (els.autoPrivacy) els.autoPrivacy.value = 'public';
   disconnectYoutube();
   updateSettingsStatus();
   refreshFinderAvailability();
@@ -1296,7 +1296,11 @@ async function xhrUpload(url, body, token, onProgress) {
 
 async function uploadToYouTube(options = {}) {
   const media = state.uploadFile || state.generatedExport?.blob || window.ClipFreeExport?.blob;
-  if (!media) return alert('Choose or generate a video first.');
+  if (!media) {
+    const err = new Error('Choose or generate a video first.');
+    if (options?.rethrow) throw err;
+    return alert(err.message);
+  }
   const isFullAuto = Boolean(state.autoUploadQueued);
   const certified = isFullAuto ? Boolean(els.autoUploadCertification?.checked) : Boolean(els.uploadCertification?.checked);
   if (!certified) {
@@ -1305,7 +1309,11 @@ async function uploadToYouTube(options = {}) {
     return alert(err.message);
   }
   const title = els.uploadTitle.value.trim();
-  if (!title) return alert('Enter a YouTube title first.');
+  if (!title) {
+    const err = new Error('Enter a YouTube title first.');
+    if (options?.rethrow) throw err;
+    return alert(err.message);
+  }
   const description = els.uploadDescription.value.trim();
   const tags = limitTagList(els.uploadTags.value.split(',').map(x => x.trim()).filter(Boolean));
   els.uploadButton.disabled = true;
@@ -1330,6 +1338,7 @@ async function uploadToYouTube(options = {}) {
       setNotice(els.uploadStatus, `Uploading to YouTube… ${Math.round(p * 100)}%`);
       if (state.autoUploadQueued) setAutoStatus('Uploading to YouTube', 80 + Math.round(p * 18), `Upload ${Math.round(p * 100)}% complete…`, 'good');
     });
+    if (!result?.id) throw new Error('YouTube accepted the request but did not return a video ID. The upload is not counted as successful.');
     els.uploadProgress.style.width = '96%';
     if (els.uploadCaptions.checked) {
       const srt = state.generatedExport?.srt || window.ClipFreeExport?.srt || '';
@@ -1352,7 +1361,12 @@ async function uploadToYouTube(options = {}) {
     els.uploadProgress.style.width = '100%';
     const watchLink = `https://www.youtube.com/watch?v=${result.id}`;
     els.uploadStatus.className = 'notice good';
-    els.uploadStatus.innerHTML = `Upload complete. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>. New/unverified API projects may force uploads to Private.`;
+    els.uploadStatus.innerHTML = `Upload complete. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>. YouTube Data API compliance status can affect the requested visibility; check YouTube Studio for the final status.`;
+    try {
+      window.dispatchEvent(new CustomEvent('clipfree-youtube-upload-confirmed', {
+        detail: { videoId: result.id, privacy: els.uploadPrivacy.value, title: metadata.snippet.title }
+      }));
+    } catch {}
     setTimeout(() => refreshAllChannelData().catch(console.warn), 1500);
     return result;
   } catch (err) {

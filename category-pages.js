@@ -201,6 +201,11 @@
   };
 
   window.ClipFree20State = bulk;
+  window.ClipFreeConfirmedUploadState = window.ClipFreeConfirmedUploadState || {
+    total: 0,
+    ids: [],
+    lastError: ''
+  };
 
   function addOption(select, value) {
     if (!select || [...select.options].some(o => Number(o.value) === value)) return;
@@ -394,7 +399,8 @@
         select.value = String(chunk);
         select.dispatchEvent(new Event('change', {bubbles:true}));
 
-        setBulkStatus(`Round ${i + 1}/${chunks.length}: creating ${chunk} Short${chunk === 1 ? '' : 's'} (${bulk.completed}/${requested} complete)…`, bulk.completed);
+        const confirmedBefore = Number(window.ClipFreeConfirmedUploadState?.total || 0);
+        setBulkStatus(`Round ${i + 1}/${chunks.length}: creating ${chunk} Short${chunk === 1 ? '' : 's'} (${bulk.completed}/${requested} confirmed on YouTube)…`, bulk.completed);
 
         bulk.internalClick = true;
         try {
@@ -404,12 +410,24 @@
         }
 
         await waitForCycle(button, kind);
-        bulk.completed = Math.min(requested, bulk.completed + chunk);
-        setBulkStatus(`${bulk.completed}/${requested} Shorts finished. Preparing the next round…`, bulk.completed, 'good');
+
+        const confirmedAfter = Number(window.ClipFreeConfirmedUploadState?.total || 0);
+        const confirmedThisRound = Math.max(0, confirmedAfter - confirmedBefore);
+        bulk.completed = Math.min(requested, bulk.completed + confirmedThisRound);
+
+        if (confirmedThisRound < chunk) {
+          const lastError = window.ClipFreeConfirmedUploadState?.lastError || '';
+          throw new Error(
+            `YouTube confirmed ${confirmedThisRound}/${chunk} uploads in this round. ` +
+            `${lastError || 'The batch will stop here instead of pretending the videos were uploaded.'}`
+          );
+        }
+
+        setBulkStatus(`${bulk.completed}/${requested} Shorts confirmed on YouTube. Preparing the next round…`, bulk.completed, 'good');
         await sleep(1000);
       }
 
-      setBulkStatus(`All ${requested} Shorts finished ❤️ Check YouTube Studio for their final visibility/status.`, requested, 'good');
+      setBulkStatus(`All ${requested} Shorts are confirmed on YouTube ❤️ Check YouTube Studio for their visibility/status.`, requested, 'good');
     } catch (err) {
       console.error('ClipFree 20-mode stopped', err);
       setBulkStatus(`Stopped after ${bulk.completed}/${requested}. ${err?.message || err}`, bulk.completed, 'bad');
@@ -654,6 +672,7 @@
   // after SEO optimization but before youtube.js performs the upload.
   window.addEventListener('clipfree-export-ready', (event) => {
     const detail = event.detail || {};
+    if (window.CLIPFREE_GROWTH_ENGINE_ACTIVE) return;
     const shouldStyle = bulk.active || detail?.source?.kind === 'animal-generator';
     if (!shouldStyle) return;
 
@@ -846,9 +865,9 @@
 
             <label class="simple-field"><span>YouTube visibility</span>
               <select id="simplePrivacy">
-                <option value="private">Private</option>
+                <option value="public" selected>Public</option>
                 <option value="unlisted">Unlisted</option>
-                <option value="public">Public</option>
+                <option value="private">Private</option>
               </select>
             </label>
 
@@ -943,7 +962,7 @@
     const style = $('simpleStyle')?.value || 'documentary';
     const duration = $('simpleDuration')?.value || '24';
     const count = $('simpleCount')?.value || '1';
-    const privacy = $('simplePrivacy')?.value || 'private';
+    const privacy = $('simplePrivacy')?.value || 'public';
     const sounds = $('simpleSounds')?.value !== 'off';
     const rights = Boolean($('simpleRights')?.checked);
 
@@ -978,10 +997,11 @@
   $('simpleCount')?.addEventListener('change', updateStartLabel);
   updateStartLabel();
 
-  // Default simple visibility to whatever the underlying app currently uses.
+  // Growth Mode defaults to Public, matching this channel's publishing workflow.
+  // YouTube may still force Private while the separate Data API compliance review is pending.
   setTimeout(() => {
-    const p = $('autoPrivacy')?.value;
-    if (p && $('simplePrivacy')) $('simplePrivacy').value = p;
+    if ($('simplePrivacy')) $('simplePrivacy').value = 'public';
+    setUnderlyingValue('autoPrivacy', 'public');
   }, 400);
 
   function setSimpleStatus(text, kind = '') {
@@ -1009,7 +1029,7 @@
     const t = $('animalGeneratorStatus')?.textContent?.trim();
     const b = window.ClipFree20State;
     if (b?.active && b.total) {
-      return `${b.completed || 0}/${b.total} Shorts uploaded/finished so far. ${t || 'ClipFree is working…'}`;
+      return `${b.completed || 0}/${b.total} Shorts CONFIRMED on YouTube so far. ${t || 'ClipFree is working…'}`;
     }
     return t || 'ClipFree is working…';
   }
@@ -1025,7 +1045,7 @@
     if (!isConnected()) throw new Error('YouTube connection did not finish. Approve Google access, then tap Start again.');
   }
 
-  async function monitorRun(nativeButton, requested) {
+  async function monitorRun(nativeButton, requested, confirmedStart = 0) {
     const deadline = Date.now() + (6 * 60 * 60 * 1000);
     await sleep(350);
 
@@ -1047,8 +1067,14 @@
       throw new Error(finalText);
     }
 
+    const confirmedTotal = Number(window.ClipFreeConfirmedUploadState?.total || 0);
+    const confirmedThisRun = Math.max(0, confirmedTotal - Number(confirmedStart || 0));
+    if (confirmedThisRun < requested) {
+      throw new Error(`Only ${confirmedThisRun}/${requested} Shorts from this run were confirmed by YouTube. ClipFree will not report success without a real YouTube video ID.`);
+    }
+
     setSimpleProgress(100);
-    setSimpleStatus(`${requested} Short${requested === 1 ? '' : 's'} finished ❤️ Check YouTube Studio for the final visibility/status.`, 'good');
+    setSimpleStatus(`${requested} Short${requested === 1 ? '' : 's'} confirmed on YouTube ❤️ Check YouTube Studio for visibility/status.`, 'good');
   }
 
   $('simpleStart')?.addEventListener('click', async () => {
@@ -1075,10 +1101,11 @@
       const nativeButton = $('generateAnimalVideo');
       if (!nativeButton) throw new Error('The animal Shorts engine is not available. Refresh ClipFree and try again.');
 
+      const confirmedStart = Number(window.ClipFreeConfirmedUploadState?.total || 0);
       setSimpleStatus(`Starting ${cfg.count} SEO-optimized Short${cfg.count === 1 ? '' : 's'}… Keep this tab open.`);
       nativeButton.click();
 
-      await monitorRun(nativeButton, cfg.count);
+      await monitorRun(nativeButton, cfg.count, confirmedStart);
     } catch (err) {
       console.error('Simple Shorts Studio', err);
       setSimpleStatus(err?.message || String(err), 'bad');
@@ -1346,6 +1373,7 @@
   window.addEventListener('clipfree-export-ready', event => {
     try {
       const detail = event.detail || {};
+      if (window.CLIPFREE_GROWTH_ENGINE_ACTIVE) return;
       if (detail.__clipfreeTrendSeoReady) return;
       applyTrendSeo(detail);
     } catch (err) {
@@ -1504,7 +1532,26 @@
         throw new Error('Duplicate protection stopped this Short because its source footage was already uploaded. ClipFree will not intentionally post the same source again.');
       }
 
-      const result = await originalUpload(file, meta);
+      let result;
+      try {
+        result = await originalUpload(file, meta);
+      } catch (err) {
+        window.ClipFreeConfirmedUploadState.lastError = err?.message || String(err);
+        throw err;
+      }
+
+      if (!result?.id) {
+        const err = new Error('YouTube did not return a video ID, so this Short is NOT counted as uploaded.');
+        window.ClipFreeConfirmedUploadState.lastError = err.message;
+        throw err;
+      }
+
+      const confirmed = window.ClipFreeConfirmedUploadState;
+      if (!confirmed.ids.includes(result.id)) {
+        confirmed.ids.push(result.id);
+        confirmed.total += 1;
+      }
+      confirmed.lastError = '';
 
       for (const key of keys) used.add(key);
       saveUsed(used);
@@ -1669,6 +1716,7 @@
   // a portrait-safe cover before youtube.js receives the final export event.
   window.addEventListener('clipfree-export-ready', event => {
     const detail = event.detail || {};
+    if (window.CLIPFREE_GROWTH_ENGINE_ACTIVE) return;
     if (detail.__clipfreePortraitSafeReady || detail.kind !== 'animal-generator') return;
 
     event.stopImmediatePropagation();
@@ -1974,6 +2022,7 @@
   // source file identifies a different animal.
   window.addEventListener('clipfree-export-ready', event => {
     const detail = event.detail || {};
+    if (window.CLIPFREE_GROWTH_ENGINE_ACTIVE) return;
     if (detail.__clipfreeActualAnimalReady || detail.kind !== 'animal-generator') return;
 
     const actual = detectAnimal(sourceText(detail));
@@ -2136,6 +2185,7 @@
   // Final high-volume SEO pass, after the actual-animal detector.
   window.addEventListener('clipfree-export-ready', event => {
     const detail = event.detail || {};
+    if (window.CLIPFREE_GROWTH_ENGINE_ACTIVE) return;
     if (detail.__clipfreeHighestKeywordReady || detail.kind !== 'animal-generator') return;
 
     const animal = actualAnimal(detail);
@@ -2327,6 +2377,7 @@
 */
 (() => {
   const $ = id => document.getElementById(id);
+  window.CLIPFREE_GROWTH_ENGINE_ACTIVE = true;
 
   const TITLE_HISTORY_KEY = 'clipfree_title_history_v4';
   const CONTENT_HISTORY_KEY = 'clipfree_content_history_v4';
@@ -2876,9 +2927,7 @@
     const detail=event.detail || {};
     if (detail.__clipfreeGrowthFinalReady || detail.kind!=='animal-generator') return;
 
-    // Earlier species-detection pass may stop and redispatch first. Wait for that.
-    if (!detail.__clipfreeActualAnimalReady) return;
-
+    // Final Growth Engine owns species detection/SEO/cover generation.
     event.stopImmediatePropagation();
 
     const species=detectSpecies(detail);
@@ -2950,4 +2999,16 @@
     if (note) note.textContent=
       'Growth Mode copies the STRUCTURE of your successful wildlife Shorts, not the same footage. It does not intentionally reuse previous sources or titles. SEO stays accurate to the actual animal/video; no unrelated high-volume keyword is inserted.';
   },900);
+})();
+
+
+/* CLIPFREE CONFIRMED-UPLOAD UI NOTE */
+(() => {
+  setTimeout(() => {
+    const note = document.querySelector('#clipfreeSimpleStudio .simple-note');
+    if (note) {
+      note.textContent =
+        'The progress counter now counts ONLY uploads that return a real YouTube video ID. If YouTube rejects an upload, ClipFree stops and shows the real error instead of saying it was uploaded. Google OAuth is verified. YouTube Data API compliance is a separate review; while that review is pending, YouTube may still force API uploads to Private.';
+    }
+  }, 1000);
 })();
