@@ -13,13 +13,6 @@
   <meta property="og:description" content="Clip videos, build YouTube metadata, review channel performance and upload from one browser-based tool." />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="stylesheet" href="styles.css" />
-  <style>
-    .top-youtube-connect{background:linear-gradient(135deg,#7c5cff,#5b47d8);color:#fff;font:inherit;font-weight:800;cursor:pointer;white-space:nowrap;border:1px solid #6d59dd}
-    .top-youtube-connect:disabled{cursor:wait;opacity:.78}
-    .top-youtube-connect.connected{background:#10271b;border-color:#276b45;color:#8ff0b5}
-    @media(max-width:700px){.topbar nav{gap:8px}.topbar nav .top-youtube-connect,.topbar nav .pill[href="#setup"]{font-size:.78rem;padding:9px 10px}}
-    @media(max-width:390px){.topbar nav .pill[href="#setup"]{display:none}}
-  </style>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script type="application/ld+json">
   {
@@ -37,6 +30,7 @@
   <header class="topbar">
     <a class="brand" href="#">ClipFree <span>AI</span></a>
     <nav>
+      <a href="#verification-demo">Demo</a>
       <a href="#category-wizard">Categories</a>
       <a href="#autopilot">Full Auto</a>
       <a href="#animal-generator">Animal AI</a>
@@ -44,15 +38,9 @@
       <a href="#youtube-growth">YouTube Growth</a>
       <a href="#finder">Reusable Finder</a>
       <a href="#donate">Donate ❤️</a>
-      <button id="topConnectYoutube" class="pill top-youtube-connect" type="button" aria-label="Connect YouTube">Connect YouTube</button>
       <a class="pill" href="#setup">Setup</a>
     </nav>
   </header>
-
-  <a id="topYoutubeConnection" href="#youtube-growth" aria-live="polite"
-     style="display:block;text-align:center;text-decoration:none;padding:10px 14px;font-size:14px;font-weight:800;letter-spacing:.01em;background:#17171f;color:#d0d0da;border-top:1px solid #272735;border-bottom:1px solid #272735">
-    ● YouTube not connected
-  </a>
 
   <main>
     <section class="hero">
@@ -69,6 +57,28 @@
       </div>
     </section>
 
+
+    <section id="verification-demo" class="growth-shell" style="padding-top:18px;padding-bottom:18px">
+      <section class="growth-card wide-card" style="border:1px solid rgba(139,92,246,.55)">
+        <div class="card-body">
+          <div class="badge">GOOGLE VERIFICATION DEMO • QUICK ACCESS</div>
+          <h2 style="margin-bottom:8px">Everything for the OAuth demo is together here.</h2>
+          <p class="subcopy" style="margin-bottom:14px">Use these buttons while screen-recording. They use ClipFree's existing YouTube controls and do not change the OAuth permissions.</p>
+
+          <div class="hero-actions" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+            <a class="secondary" href="privacy.html" target="_blank" rel="noopener">1. Privacy Policy</a>
+            <button id="demoConnectYoutube" class="primary" type="button">2. Connect YouTube</button>
+            <a class="secondary" href="#youtube-growth">3. Analytics</a>
+            <a class="secondary" href="#upload">4. Upload Tools</a>
+            <button id="demoDisconnectYoutube" class="secondary" type="button">5. Disconnect</button>
+          </div>
+
+          <div class="notice subtle" style="margin-top:14px">
+            <strong>Fast recording order:</strong> Privacy → Connect → Google consent → Analytics → Upload Tools → Disconnect.
+          </div>
+        </div>
+      </section>
+    </section>
 
     <section id="category-wizard" class="growth-shell">
       <div class="section-title">
@@ -445,7 +455,7 @@
       </div>
 
       <div class="notice subtle" style="margin-bottom:12px">
-        <strong>Before you connect:</strong> ClipFree AI requests only the Google/YouTube permissions used by the features shown on this page: permission to view and manage your YouTube videos, captions, playlists and channel data needed for creator/upload tools, plus read-only access to your YouTube Analytics reports. ClipFree AI uses this Google user data only for the features you choose in this browser. It does not sell Google user data, disclose it to advertisers, data brokers or information resellers, use it for advertising, or use it to train generalized or non-personalized AI models. OAuth access tokens stay in browser page memory and are not stored in a ClipFree AI server database. Google shows its own consent screen before access is granted. You can disconnect and revoke access at any time. <a href="privacy.html">Read the Privacy Policy</a>.
+        <strong>Before you connect:</strong> ClipFree AI requests only the Google/YouTube permissions used by the features shown on this page: permission to view and manage your YouTube videos, captions, playlists and channel data needed for creator/upload tools, plus read-only access to your YouTube Analytics reports. ClipFree uses this data only to provide the features you choose in this browser. It does not sell Google user data, use it for advertising, or use it to train AI models. Google shows its own consent screen before access is granted. You can disconnect and revoke access at any time. <a href="privacy.html">Read the Privacy Policy</a>.
       </div>
       <div class="notice subtle" style="margin-bottom:12px">
         <strong>OAuth scopes used:</strong> <code>youtube.force-ssl</code> for YouTube creator/upload/channel actions and <code>yt-analytics.readonly</code> for the analytics dashboard. ClipFree AI is an independent application and is not endorsed by YouTube.
@@ -558,7 +568,7 @@
         <div>
           <div class="badge">ONE-TIME SETUP</div>
           <h2>Connect the official YouTube APIs.</h2>
-          <p>Your OAuth Client ID and optional API key are stored only in this browser's local storage. OAuth access tokens stay in page memory for the active session. Do not paste a Google client secret into this website.</p>
+          <p>Your OAuth Client ID and optional API key are stored only in this browser's local storage. Do not paste a Google client secret into this website.</p>
         </div>
       </div>
 
@@ -578,7 +588,7 @@
               Keep <a href="privacy.html">Privacy Policy</a>, <a href="terms.html">Terms</a>, and the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms</a> available for review.
             </div>
             <div class="notice subtle">
-              <strong>Google OAuth verification disclosure:</strong> ClipFree requests <code>youtube.force-ssl</code> because its visible creator tools can upload videos/captions/thumbnails, manage playlists and perform channel actions you initiate, and <code>yt-analytics.readonly</code> because the visible analytics dashboard reads your YouTube Analytics reports. Access tokens stay in page memory for the active session; the static site does not operate a server database that stores your token or channel analytics. Google user data is not sold or disclosed to advertisers, data brokers or information resellers. <a href="privacy.html">Full Google user-data disclosure</a>.
+              <strong>Google OAuth verification disclosure:</strong> ClipFree requests <code>youtube.force-ssl</code> because its visible creator tools can upload videos/captions/thumbnails, manage playlists and perform channel actions you initiate, and <code>yt-analytics.readonly</code> because the visible analytics dashboard reads your YouTube Analytics reports. Access tokens stay in page memory for the active session; the static GitHub Pages build does not operate a server database that stores your token or channel analytics.
             </div>
           </div>
         </section>
@@ -601,9 +611,9 @@
               <li>Create or open a Google Cloud project.</li>
               <li>Enable <strong>YouTube Data API v3</strong> and <strong>YouTube Analytics API</strong>.</li>
               <li>Create an <strong>OAuth 2.0 Client ID → Web application</strong>.</li>
-              <li>Add <code>https://coreyvibe.org</code> as an Authorized JavaScript origin. If you also use the GitHub Pages address directly, add <code>https://frymastercheese.github.io</code> as a second authorized origin.</li>
+              <li>Add <code>https://frymastercheese.github.io</code> as an Authorized JavaScript origin.</li>
               <li>Paste the Client ID into the box on the left and save.</li>
-              <li>For Google app details, use <code>https://coreyvibe.org/privacy.html</code> and <code>https://coreyvibe.org/terms.html</code>.</li>
+              <li>For Google app details, you can use <code>https://frymastercheese.github.io/Video-clipper/privacy.html</code> and <code>https://frymastercheese.github.io/Video-clipper/terms.html</code>.</li>
               <li>Optional: create a restricted API key for Creative Commons search without logging in.</li>
             </ol>
             <p class="warning-copy">For safety, this build never asks for your Google password or a client secret. Google handles sign-in directly.</p>
@@ -636,8 +646,6 @@
     </section>
 
     <section id="privacy" class="privacy-section">
-      <h2>Privacy, Google data and channel safety</h2>
-      <p>When you connect YouTube, ClipFree AI uses Google user data only for the YouTube features you request. Google user data is not sold or disclosed to advertisers, data brokers or information resellers. OAuth access tokens stay in browser page memory, HTTPS/TLS protects data in transit, and you can disconnect or revoke access at any time. <a href="privacy.html">Read the full Privacy Policy</a>.</p>
       <h2>Important limits and channel safety</h2>
       <p>ClipFree does not add a watermark or application-level clip counter. Browser memory, CPU/GPU speed, source-video size, API quotas and YouTube account/API restrictions still create practical limits. No tool can guarantee subscribers, views or watch hours. This build is designed to improve workflow and use your real channel data, not fake engagement.</p>
       <p>For reused material, Creative Commons licensing and attribution are only part of the picture. Copyright, commercial-use rights and YouTube's reused/inauthentic-content monetization rules can still apply. Originality Guard automatically adds a distinct educational storyline and visible commentary to externally sourced footage, checks for repeated sources, and keeps higher-risk outputs Private for review. This reduces risk but cannot guarantee YouTube Partner Program approval.</p>
@@ -653,5 +661,20 @@
   <script type="module" src="premium-auto.js"></script>
   <script type="module" src="originality-guard.js"></script>
   <script type="module" src="category-pages.js"></script>
+  <script type="module" src="upload-speed-boost.js"></script>
+  <script>
+    (() => {
+      const demoConnect = document.getElementById('demoConnectYoutube');
+      const demoDisconnect = document.getElementById('demoDisconnectYoutube');
+
+      demoConnect?.addEventListener('click', () => {
+        document.getElementById('connectYoutube')?.click();
+      });
+
+      demoDisconnect?.addEventListener('click', () => {
+        document.getElementById('disconnectYoutube')?.click();
+      });
+    })();
+  </script>
 </body>
 </html>
