@@ -1,0 +1,19 @@
+ClipFree AI — Upload Speed Boost
+
+1. Upload upload-speed-boost.js to the ROOT of FRYMASTERCHEESE/Video-clipper.
+
+2. Open index.html and add this ONE line directly after the existing category-pages.js script line:
+
+<script type="module" src="upload-speed-boost.js"></script>
+
+The bottom of index.html should look like:
+
+<script type="module" src="category-pages.js"></script>
+<script type="module" src="upload-speed-boost.js"></script>
+
+3. Commit the changes, wait for GitHub Pages to update, then refresh https://coreyvibe.org/.
+
+What it speeds up:
+- Already-rendered wildlife montages are no longer sent through a second transcription/AI-analysis/FFmpeg export before upload.
+- Existing YouTube SEO, actual-animal detection, captions, thumbnail generation, attribution, duplicate protection, Public/Private setting and YouTube confirmation stay in place.
+- This does not fake or bypass YouTube upload speed. The actual network transfer still depends on your internet connection and YouTube.
