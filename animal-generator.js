@@ -87,16 +87,150 @@ async function downloadSource(item,index){ const response=await fetch(item.fileU
 
 function uniqueSuitableSources(items){ const seen=new Set(); return (items || []).filter(item=>{ const key=String(item?.sourceUrl || item?.fileUrl || item?.title || '').trim(); if(!key || seen.has(key)) return false; seen.add(key); return !item.size || item.size <= 28*1024*1024; }); }
 
+const CLIPFREE_SOURCE_HISTORY_KEY='clipfree_source_history_v5';
+const CLIPFREE_VARIETY_CURSOR_KEY='clipfree_variety_cursor_v2';
+
+const VARIETY_QUERIES=[
+'lion wildlife','tiger wildlife','leopard wildlife','cheetah wildlife','jaguar wildlife',
+'cougar mountain lion wildlife','snow leopard wildlife','lynx wildlife','bobcat wildlife',
+'wolf wildlife','coyote wildlife','red fox wildlife','arctic fox wildlife','fennec fox wildlife',
+'brown bear wildlife','black bear wildlife','polar bear wildlife','grizzly bear wildlife',
+'elephant wildlife','giraffe wildlife','zebra wildlife','rhinoceros wildlife','hippopotamus wildlife',
+'bison wildlife','buffalo wildlife','moose wildlife','elk wildlife','deer wildlife','reindeer wildlife',
+'caribou wildlife','pronghorn wildlife','antelope wildlife','gazelle wildlife','wildebeest wildlife',
+'ibex wildlife','bighorn sheep wildlife','mountain goat wildlife','wild boar wildlife',
+'kangaroo wildlife','wallaby wildlife','koala wildlife','wombat wildlife','tasmanian devil wildlife',
+'platypus wildlife','echidna wildlife','sloth wildlife','anteater wildlife','armadillo wildlife',
+'capybara wildlife','beaver wildlife','otter wildlife','badger wildlife','wolverine wildlife',
+'raccoon wildlife','skunk wildlife','porcupine wildlife','rabbit wildlife','hare wildlife',
+'squirrel wildlife','chipmunk wildlife','marmot wildlife','prairie dog wildlife',
+'gorilla wildlife','chimpanzee wildlife','orangutan wildlife','baboon wildlife','macaque wildlife',
+'lemur wildlife','gibbon wildlife','howler monkey wildlife','spider monkey wildlife',
+'african wild dog wildlife','hyena wildlife','jackal wildlife','meerkat wildlife','mongoose wildlife',
+'camel wildlife','llama wildlife','alpaca wildlife','wild horse wildlife','wild donkey wildlife',
+'crocodile wildlife','alligator wildlife','komodo dragon wildlife','iguana wildlife','monitor lizard wildlife',
+'chameleon wildlife','gecko wildlife','tortoise wildlife','sea turtle wildlife',
+'python snake wildlife','cobra wildlife','rattlesnake wildlife','boa constrictor wildlife',
+'bald eagle wildlife','golden eagle wildlife','hawk wildlife','falcon wildlife','osprey wildlife',
+'owl wildlife','vulture wildlife','condor wildlife','raven wildlife','crow wildlife',
+'parrot wildlife','macaw wildlife','toucan wildlife','hornbill wildlife','kingfisher wildlife',
+'woodpecker wildlife','hummingbird wildlife','flamingo wildlife','pelican wildlife','heron wildlife',
+'stork wildlife','crane wildlife','swan wildlife','goose wildlife','duck wildlife',
+'penguin wildlife','albatross wildlife','puffin wildlife','seagull wildlife',
+'shark wildlife','great white shark wildlife','hammerhead shark wildlife','whale shark wildlife',
+'blue whale wildlife','humpback whale wildlife','orca wildlife','dolphin wildlife','porpoise wildlife',
+'seal wildlife','sea lion wildlife','walrus wildlife','manatee wildlife','dugong wildlife',
+'octopus wildlife','squid wildlife','jellyfish wildlife','seahorse wildlife','stingray wildlife',
+'manta ray wildlife','eel wildlife','salmon wildlife','trout wildlife','tuna wildlife',
+'clownfish wildlife','reef fish wildlife','coral reef wildlife',
+'frog wildlife','tree frog wildlife','toad wildlife','salamander wildlife','newt wildlife',
+'butterfly wildlife','dragonfly wildlife','bee wildlife','beetle wildlife','mantis wildlife',
+'spider wildlife','scorpion wildlife','crab wildlife','lobster wildlife',
+'savanna wildlife','forest wildlife','rainforest wildlife','desert wildlife','wetland wildlife',
+'river wildlife','lake wildlife','mountain wildlife','arctic wildlife','tundra wildlife',
+'coastal wildlife','ocean wildlife','grassland wildlife','prairie wildlife','woodland wildlife'
+];
+
+function sourceKey(item){ return String(item?.sourceUrl || item?.fileUrl || item?.title || '').trim(); }
+
+function loadSourceHistory(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(CLIPFREE_SOURCE_HISTORY_KEY)||'[]');
+    return new Set(Array.isArray(raw)?raw.filter(Boolean):[]);
+  }catch{return new Set();}
+}
+
+function saveSourceHistory(set){
+  try{ localStorage.setItem(CLIPFREE_SOURCE_HISTORY_KEY,JSON.stringify([...set].slice(-5000))); }catch{}
+}
+
+function rememberSource(item){
+  const key=sourceKey(item); if(!key) return;
+  const used=loadSourceHistory(); used.add(key); saveSourceHistory(used);
+}
+
+async function blockedSourceSet(){
+  const blocked=loadSourceHistory();
+  try{
+    const urls=await window.ClipFreeYouTube?.getUploadedSourceUrls?.(500);
+    for(const url of urls || []) blocked.add(String(url));
+  }catch(err){ console.warn('Could not scan old YouTube source URLs',err); }
+  return blocked;
+}
+
+function nextVarietyQueries(count){
+  let cursor=Number(localStorage.getItem(CLIPFREE_VARIETY_CURSOR_KEY)||0);
+  if(!Number.isFinite(cursor) || cursor<0) cursor=0;
+  const out=[];
+  for(let i=0;i<count;i++) out.push(VARIETY_QUERIES[(cursor+i)%VARIETY_QUERIES.length]);
+  cursor=(cursor+count)%VARIETY_QUERIES.length;
+  try{ localStorage.setItem(CLIPFREE_VARIETY_CURSOR_KEY,String(cursor)); }catch{}
+  return out;
+}
+
+async function findOneUnusedSource(query,blocked,alreadyChosen){
+  const variants=[
+    query,
+    `${query} nature`,
+    `${query} habitat`,
+    `${query} public domain`,
+    `${query} animal behavior`
+  ];
+  for(const q of variants){
+    let results=[];
+    try{ results=await window.ClipFreeYouTube.searchCommonsDownloadable(q,20); }catch(err){ console.warn('Source search skipped',q,err); }
+    for(const item of uniqueSuitableSources(results)){
+      const key=sourceKey(item);
+      if(!key || blocked.has(key) || alreadyChosen.has(key)) continue;
+      return item;
+    }
+  }
+  return null;
+}
+
+async function collectBatchSources({query,preset,batchCount,customTopic,varietyMode}){
+  const blocked=await blockedSourceSet();
+  const selected=[];
+  const selectedKeys=new Set();
+
+  const queries=varietyMode
+    ? nextVarietyQueries(batchCount)
+    : Array.from({length:batchCount},(_,i)=> i===0 ? query : `${query} ${['nature','wildlife','habitat','behavior','in the wild','animal'][i%6]}`);
+
+  for(let i=0;i<queries.length;i++){
+    const item=await findOneUnusedSource(queries[i],blocked,selectedKeys);
+    if(item){
+      selected.push(item);
+      selectedKeys.add(sourceKey(item));
+      continue;
+    }
+
+    // Broader fallback still refuses anything already used.
+    const fallback=await findOneUnusedSource(preset.query,blocked,selectedKeys);
+    if(fallback){
+      selected.push(fallback);
+      selectedKeys.add(sourceKey(fallback));
+    }
+  }
+
+  if(selected.length<batchCount){
+    throw new Error(`ClipFree found ${selected.length}/${batchCount} unused Public Domain/CC0 source videos. It stopped instead of repeating old footage. Try again; Source Vault will rotate to more searches.`);
+  }
+  return selected;
+}
+
+
 async function generateAnimalShort(){
   if(running) return;
   if(!window.ClipFreeYouTube?.searchCommonsDownloadable || !window.ClipFreeAutomation?.createMontageFromFiles){ setStatus('The video tools are still loading. Wait a few seconds and try again.',0,'bad'); return; }
   running=true; generateButton.disabled=true;
   const preset=PRESETS[activePreset] || PRESETS.lions; const style=styleSelect?.value || 'documentary'; const duration=Math.max(12,Math.min(30,Number(durationSelect?.value)||24)); const batchCount=Math.max(1,Math.min(8,Number(batchSelect?.value)||1)); const useSounds=soundsToggle?.checked!==false; const customTopic=(topicInput?.value || '').trim(); const query=customTopic || preset.query;
   try{
-    setStatus(`Finding unique reusable ${preset.label.toLowerCase()} clips for ${batchCount} Short${batchCount===1?'':'s'}…`,4);
-    let items=await window.ClipFreeYouTube.searchCommonsDownloadable(query,Math.max(20,batchCount*3)); let suitable=uniqueSuitableSources(items);
-    if(suitable.length<batchCount && customTopic){ setStatus('Trying a broader animal search for more unique source videos…',7); const broader=await window.ClipFreeYouTube.searchCommonsDownloadable(preset.query,Math.max(20,batchCount*3)); suitable=uniqueSuitableSources([...suitable,...broader]); }
-    if(suitable.length<batchCount) throw new Error(`Only ${suitable.length} unique reusable source video${suitable.length===1?'':'s'} were found. Choose a smaller batch or a broader animal topic. ClipFree will not repeat footage to fill the batch.`);
+    const varietyMode=Boolean(window.ClipFreeVarietyMode);
+    setStatus(varietyMode
+      ? `Source Vault: finding ${batchCount} DIFFERENT unused wildlife videos…`
+      : `Finding ${batchCount} unique unused ${preset.label.toLowerCase()} videos…`,4);
+    const suitable=await collectBatchSources({query,preset,batchCount,customTopic,varietyMode});
 
     let soundItems=[]; if(useSounds){ setStatus('Finding real open-licensed animal sounds…',9); try{ soundItems=await searchCommonsAudio(preset.soundQuery || `${query} animal sound`,12); }catch(err){ console.warn('Animal audio search skipped',err); } }
 
@@ -115,7 +249,8 @@ async function generateAnimalShort(){
       setStatus(`Short ${batchIndex+1}/${batchCount}: SEO, captions, thumbnail + YouTube upload…`,baseProgress+18,'good');
       const uploadResult=await window.ClipFreeYouTube.startFullAutoWithFile(montage,meta);
       if(!uploadResult?.id) throw new Error(`Short ${batchIndex+1}: YouTube did not return a video ID, so it is not counted as uploaded.`);
-      setStatus(`Short ${batchIndex+1}/${batchCount} confirmed on YouTube.`,baseProgress+24,'good');
+      rememberSource(chosen[0]);
+      setStatus(`Short ${batchIndex+1}/${batchCount} confirmed on YouTube. Source permanently added to the no-repeat history.`,baseProgress+24,'good');
     }
     setStatus(`${batchCount} animal Short${batchCount===1?'':'s'} confirmed on YouTube ❤️`,100,'good');
   }catch(err){ console.error(err); setStatus(err?.message || String(err),0,'bad'); }

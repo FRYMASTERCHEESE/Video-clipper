@@ -587,6 +587,33 @@ async function fetchUploadVideos(playlistId, limit = 100) {
   return videos;
 }
 
+
+async function getUploadedSourceUrls(limit = 500) {
+  if (!state.channel) await refreshAllChannelData();
+  const uploadsId = state.channel?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsId) return [];
+
+  const videos = await fetchUploadVideos(uploadsId, Math.max(1, Math.min(500, Number(limit) || 500)));
+  const urls = new Set();
+
+  for (const video of videos) {
+    const description = String(video?.snippet?.description || '');
+    const matches = description.match(/https?:\/\/[^\s<>"')\]]+/gi) || [];
+    for (let url of matches) {
+      url = url.replace(/[.,;:!?]+$/,'');
+      if (
+        /commons\.wikimedia\.org\/wiki\//i.test(url) ||
+        /archive\.org\/details\//i.test(url) ||
+        /archive\.org\/download\//i.test(url)
+      ) {
+        urls.add(url);
+      }
+    }
+  }
+
+  return [...urls];
+}
+
 async function fetchPlaylists() {
   const items = [];
   let pageToken = '';
@@ -1459,6 +1486,7 @@ window.ClipFreeYouTube = {
   startFullAutoWithFile,
   uploadToYouTube,
   isConnected: () => Boolean(state.accessToken && Date.now() < state.expiresAt),
+  getUploadedSourceUrls,
   getChannelTitle: () => state.channel?.snippet?.title || '',
 };
 

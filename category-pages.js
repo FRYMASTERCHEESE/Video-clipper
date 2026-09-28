@@ -710,7 +710,7 @@
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   const TOPICS = {
-    wildlife: { label:'🌍 Wildlife Mix', preset:'wildlife', query:'wild animals wildlife nature' },
+    wildlife: { label:'🌍 Different animals — no repeats', preset:'wildlife', query:'clipfree variety wildlife' },
     lions:    { label:'🦁 Lions',        preset:'lions',    query:'lion wildlife' },
     moose:    { label:'🫎 Moose',        preset:'wildlife', query:'moose wildlife alces alces' },
     tigers:   { label:'🐅 Tigers',       preset:'wildlife', query:'tiger wildlife panthera tigris' },
@@ -965,6 +965,7 @@
     const privacy = $('simplePrivacy')?.value || 'public';
     const sounds = $('simpleSounds')?.value !== 'off';
     const rights = Boolean($('simpleRights')?.checked);
+    window.ClipFreeVarietyMode = $('simpleTopic')?.value === 'wildlife';
 
     clickPreset(topic.preset);
     setUnderlyingValue('animalTopic', topic.query);
@@ -3011,4 +3012,73 @@
         'The progress counter now counts ONLY uploads that return a real YouTube video ID. If YouTube rejects an upload, ClipFree stops and shows the real error instead of saying it was uploaded. Google OAuth is verified. YouTube Data API compliance is a separate review; while that review is pending, YouTube may still force API uploads to Private.';
     }
   }, 1000);
+})();
+
+/* CLIPFREE FINAL SINGLE-SCREEN CLEANUP */
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // The old sections stay in the DOM only as hidden engine plumbing.
+  // The user sees ONE workflow, not duplicate wizards/cards/buttons.
+  const style = document.createElement('style');
+  style.id = 'clipfreeFinalSingleScreenCss';
+  style.textContent = `
+    body.clipfree-simple-mode main > section:not(#clipfreeSimpleStudio){display:none!important}
+    body.clipfree-simple-mode #clipfreeSimpleStudio{display:block!important}
+    body.clipfree-simple-mode #setup{display:none!important}
+    body.clipfree-simple-mode footer{display:none!important}
+    body.clipfree-simple-mode .topbar nav{display:none!important}
+    #clipfree20AnimalCard,#clipfree20Hero,.clipfree20-card,.simple-advanced{display:none!important}
+    #clipfreeSimpleStudio .simple-card{max-width:820px;margin:0 auto}
+  `;
+  document.head.appendChild(style);
+
+  function removeDuplicateVisibleUi() {
+    document.querySelectorAll('#clipfree20AnimalCard,#clipfree20Hero,.clipfree20-card').forEach(el => el.remove());
+
+    // Keep exactly one SEO chip of each label.
+    const box = document.querySelector('#clipfreeSimpleStudio .simple-seo-list');
+    if (box) {
+      const labels = [
+        'Different source every Short',
+        'Skips sources already on your channel',
+        'Actual animal detection',
+        'Unique title',
+        'Accurate description',
+        'Highest relevant keywords',
+        '8 max tags',
+        '3 hashtags',
+        '9:16 safe cover',
+        'Captions',
+        'PD/CC0 attribution'
+      ];
+      box.innerHTML = '';
+      labels.forEach(label => {
+        const chip = document.createElement('span');
+        chip.textContent = label;
+        box.appendChild(chip);
+      });
+    }
+
+    const advanced = $('simpleAdvanced');
+    if (advanced) advanced.remove();
+
+    const head = document.querySelector('#clipfreeSimpleStudio .simple-head p');
+    if (head) head.textContent =
+      'Choose the topic, style, length, amount and visibility once. “Different animals” rotates through a large wildlife source vault, skips anything already used on your channel, creates one unique Short per source, adds accurate SEO and uploads sequentially.';
+
+    const note = document.querySelector('#clipfreeSimpleStudio .simple-note');
+    if (note) note.textContent =
+      'Source Vault searches large Public Domain/CC0 repositories using a rotating wildlife query bank. It does not download thousands at once; it keeps searching new unused sources over time and permanently skips source URLs already found in your YouTube descriptions or ClipFree history.';
+  }
+
+  removeDuplicateVisibleUi();
+  setTimeout(removeDuplicateVisibleUi, 700);
+  setTimeout(removeDuplicateVisibleUi, 2200);
+
+  // Older patches can recreate legacy cards after load. Remove them immediately.
+  const observer = new MutationObserver(() => {
+    document.querySelectorAll('#clipfree20AnimalCard,#clipfree20Hero,.clipfree20-card').forEach(el => el.remove());
+  });
+  observer.observe(document.documentElement, {subtree:true, childList:true});
 })();
