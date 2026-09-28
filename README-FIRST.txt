@@ -1,20 +1,43 @@
-ClipFree AI — SPEED BOOST READY FILES
+ClipFree AI — SINGLE-UPLOAD LOCK + DUPLICATE/TITLE/PRIVACY FIX
+29 September 2026
 
-Upload BOTH files to:
-FRYMASTERCHEESE/Video-clipper
+REPLACE THESE 3 FILES:
+- youtube.js
+- animal-generator.js
+- category-pages.js
 
-1. index.html
-   - Replace the existing index.html.
-   - This version keeps the existing ClipFree page and loads upload-speed-boost.js.
+KEEP YOUR EXISTING:
+- index.html
+- upload-speed-boost.js
+- app.js
+- all other files
 
-2. upload-speed-boost.js
-   - Replace/keep the existing file with this copy.
+WHY 2 VIDEOS COULD UPLOAD WHEN YOU SELECTED 1
+The animal workflow can legitimately fire more than one internal
+"clipfree-export-ready" event while the final SEO/cover/originality package is
+being prepared. youtube.js previously kept autoUploadQueued=true until an upload
+finished, but it did not have a second "upload already in flight" lock.
 
-After upload:
-- Wait for GitHub Pages to deploy.
-- Open https://coreyvibe.org/
-- Refresh the page.
-- Test 1 Short first.
-- The fast path skips the unnecessary second AI analysis / video encode before YouTube upload.
+That meant two export-ready events could both enter the YouTube uploader before
+the first one finished, causing TWO YouTube videos from ONE requested Short.
 
-The speed of the final network upload still depends on your mobile/network connection and YouTube.
+THIS UPDATE FIXES THAT EXACT RACE:
+1. Animal-generator uploads ignore intermediate export-ready events.
+2. YouTube waits for __clipfreeGrowthFinalReady on animal Shorts.
+3. autoUploadInFlight allows only ONE event to claim each queued upload.
+4. Later re-dispatched export events are ignored while that upload is running.
+5. The lock is released on success or failure.
+
+THE OTHER FIXES ARE INCLUDED TOO:
+- exact source-video SHA-256 fingerprint duplicate protection
+- source URL + raw media URL history
+- different title generation
+- checks titles already loaded from the connected YouTube channel
+- requested Public vs actual YouTube privacy verification
+- accurate animal SEO and title protection
+
+TEST:
+Select exactly 1 Short.
+Expected result: exactly 1 confirmed YouTube video ID.
+If Public is requested but YouTube returns Private, ClipFree will show the
+actual Private status instead of claiming Public.

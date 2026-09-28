@@ -38,6 +38,7 @@ const state = {
   generatedExport: null,
   uploadFile: null,
   autoUploadQueued: false,
+  autoUploadInFlight: false,
   autoLocalSelected: [],
   autoSource: null,
   autoJobResolve: null,
@@ -65,7 +66,7 @@ function setAutoStatus(text, progress = null, detail = null, type = 'subtle') {
 
 function autoPrivacyValue() {
   const value = els.autoPrivacy?.value || state.settings.autoPrivacy || 'public';
-  return ['private','unlisted','public'].includes(value) ? value : 'private';
+  return ['private','unlisted','public'].includes(value) ? value : 'public';
 }
 
 function queueLabel(job) {
@@ -1130,6 +1131,7 @@ async function startFullAutoWithFile(file, source = null) {
     document.querySelector('#studio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     state.autoUploadQueued = false;
+    state.autoUploadInFlight = false;
     updateQueueJob(state.currentQueueId, { status:'failed', message: err?.message || String(err) });
     const reject = state.autoJobReject;
     state.autoJobResolve = null;
@@ -1223,6 +1225,20 @@ window.addEventListener('clipfree-export-ready', async (event) => {
   refreshUploadState();
 
   if (!state.autoUploadQueued) return;
+
+  // Animal Shorts can fire several export-ready events while SEO, cover,
+  // originality and the speed path finish their hand-offs. Upload ONLY the
+  // final Growth Engine package, never an earlier intermediate export.
+  if (
+    state.generatedExport?.kind === 'animal-generator' &&
+    !state.generatedExport?.__clipfreeGrowthFinalReady
+  ) return;
+
+  // Single-flight lock: once one export event claims this queued upload,
+  // every later duplicate/re-dispatched event is ignored until it finishes.
+  if (state.autoUploadInFlight) return;
+  state.autoUploadInFlight = true;
+
   try {
     setAutoStatus('Preparing YouTube upload', 76, 'Clip created. Preparing captions, thumbnail, attribution and Shorts playlist…', 'good');
     const playlistId = await ensureAutoPlaylist().catch(err => { console.warn('Playlist setup failed', err); return ''; });
@@ -1235,7 +1251,8 @@ window.addEventListener('clipfree-export-ready', async (event) => {
     updateQueueJob(state.currentQueueId, { status:'uploading', message:`Uploading as ${autoPrivacyValue()}` });
     const result = await uploadWithSafeRetries({ rethrow: true });
     state.autoUploadQueued = false;
-    updateQueueJob(state.currentQueueId, { status:'uploaded', message:`Upload complete (${autoPrivacyValue()})`, videoId: result?.id || '' });
+    state.autoUploadInFlight = false;
+    updateQueueJob(state.currentQueueId, { status:'uploaded', message:`Upload complete (${result?.actualPrivacy || autoPrivacyValue()})`, videoId: result?.id || '' });
     const link = result?.id ? `https://www.youtube.com/watch?v=${result.id}` : '';
     setAutoStatus('FULL AUTO complete', 100, `Finished: vertical Short, captions, thumbnail, SEO, attribution, upload${playlistId ? ' and playlist' : ''}.${link ? ' The video is now on your YouTube channel.' : ''}`, 'good');
     const resolve = state.autoJobResolve;
@@ -1245,6 +1262,7 @@ window.addEventListener('clipfree-export-ready', async (event) => {
   } catch (err) {
     console.error(err);
     state.autoUploadQueued = false;
+    state.autoUploadInFlight = false;
     updateQueueJob(state.currentQueueId, { status:'failed', message: err?.message || String(err) });
     setAutoStatus('Upload needs attention', 75, err.message || String(err), 'bad');
     const reject = state.autoJobReject;
@@ -1321,6 +1339,20 @@ async function xhrUpload(url, body, token, onProgress) {
   });
 }
 
+async function readUploadedVideoState(videoId, token) {
+  if(!videoId) return null;
+  try{
+    const url=ytUrl('videos',{part:'snippet,status',id:videoId,maxResults:1});
+    const response=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data?.error?.message || 'Could not verify uploaded video status.');
+    return data?.items?.[0] || null;
+  }catch(err){
+    console.warn('Upload status verification skipped',err);
+    return null;
+  }
+}
+
 async function uploadToYouTube(options = {}) {
   const media = state.uploadFile || state.generatedExport?.blob || window.ClipFreeExport?.blob;
   if (!media) {
@@ -1343,6 +1375,7 @@ async function uploadToYouTube(options = {}) {
   }
   const description = els.uploadDescription.value.trim();
   const tags = limitTagList(els.uploadTags.value.split(',').map(x => x.trim()).filter(Boolean));
+  const requestedPrivacy = ['public','unlisted','private'].includes(els.uploadPrivacy.value) ? els.uploadPrivacy.value : 'public';
   els.uploadButton.disabled = true;
   els.uploadProgress.style.width = '2%';
   setNotice(els.uploadStatus, 'Preparing YouTube upload…');
@@ -1350,7 +1383,7 @@ async function uploadToYouTube(options = {}) {
     const token = await ensureToken();
     const metadata = {
       snippet: { title: title.slice(0,100), description, categoryId: els.uploadCategory.value, defaultLanguage: 'en' },
-      status: { privacyStatus: els.uploadPrivacy.value, selfDeclaredMadeForKids: els.uploadMadeForKids.value === 'true' },
+      status: { privacyStatus: requestedPrivacy, selfDeclaredMadeForKids: els.uploadMadeForKids.value === 'true' },
     };
     if (tags.length) metadata.snippet.tags = tags;
     const boundary = `clipfree_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -1387,11 +1420,21 @@ async function uploadToYouTube(options = {}) {
     }
     els.uploadProgress.style.width = '100%';
     const watchLink = `https://www.youtube.com/watch?v=${result.id}`;
-    els.uploadStatus.className = 'notice good';
-    els.uploadStatus.innerHTML = `Upload complete. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>. YouTube Data API compliance status can affect the requested visibility; check YouTube Studio for the final status.`;
+    const verifiedVideo = await readUploadedVideoState(result.id, token);
+    const actualPrivacy = verifiedVideo?.status?.privacyStatus || requestedPrivacy;
+    result.requestedPrivacy = requestedPrivacy;
+    result.actualPrivacy = actualPrivacy;
+
+    els.uploadStatus.className = actualPrivacy === requestedPrivacy ? 'notice good' : 'notice';
+    if(requestedPrivacy === 'public' && actualPrivacy === 'private'){
+      els.uploadStatus.innerHTML = `Upload confirmed, but YouTube returned <strong>Private</strong> even though ClipFree requested <strong>Public</strong>. This is consistent with YouTube's API-project compliance restriction. ClipFree cannot override that restriction; Public API uploads become available after YouTube lifts it for the project. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video</a>.`;
+    }else{
+      els.uploadStatus.innerHTML = `Upload complete as <strong>${esc(actualPrivacy)}</strong>. <a href="${esc(watchLink)}" target="_blank" rel="noopener">Open the video on YouTube</a>.`;
+    }
+
     try {
       window.dispatchEvent(new CustomEvent('clipfree-youtube-upload-confirmed', {
-        detail: { videoId: result.id, privacy: els.uploadPrivacy.value, title: metadata.snippet.title }
+        detail: { videoId: result.id, privacy: actualPrivacy, requestedPrivacy, title: metadata.snippet.title }
       }));
     } catch {}
     setTimeout(() => refreshAllChannelData().catch(console.warn), 1500);
@@ -1487,6 +1530,7 @@ window.ClipFreeYouTube = {
   uploadToYouTube,
   isConnected: () => Boolean(state.accessToken && Date.now() < state.expiresAt),
   getUploadedSourceUrls,
+  getKnownVideoTitles: () => (state.videos || []).map(v => String(v?.snippet?.title || '').trim()).filter(Boolean),
   getChannelTitle: () => state.channel?.snippet?.title || '',
 };
 

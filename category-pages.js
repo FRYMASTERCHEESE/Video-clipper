@@ -2702,30 +2702,66 @@
   }
 
   function makeTitle(species, action, habitat, detail) {
-    const used = new Set(titleHistory().map(x => String(x).toLowerCase()));
+    const channelTitles = window.ClipFreeYouTube?.getKnownVideoTitles?.() || [];
+    const used = new Set([
+      ...titleHistory(),
+      ...channelTitles
+    ].map(x => String(x).trim().toLowerCase()).filter(Boolean));
+
     const label = species?.label || 'Wild Animal';
     const emoji = species?.emoji || '🌿';
+    const capAction = action ? action[0].toUpperCase()+action.slice(1) : '';
+    const place = habitat ? `the ${habitat}` : 'the wild';
 
     const candidates = [];
-    if (action && habitat) {
-      candidates.push(`${label} ${action[0].toUpperCase()+action.slice(1)} in the ${habitat} ${emoji} #Shorts`);
-    }
-    if (action) candidates.push(`${label} ${action[0].toUpperCase()+action.slice(1)} in the Wild ${emoji} #Shorts`);
-    if (habitat) candidates.push(`Wild ${label} in the ${habitat} ${emoji} #Shorts`);
+    if (action && habitat) candidates.push(
+      `${label} ${capAction} in ${place} ${emoji} #Shorts`,
+      `Watch This ${label} ${capAction} in ${place} ${emoji} #Shorts`,
+      `${label} ${capAction}: A Wild Moment in ${place} ${emoji} #Shorts`
+    );
+    if (action) candidates.push(
+      `${label} ${capAction} in the Wild ${emoji} #Shorts`,
+      `Wild ${label} ${capAction} Caught on Camera ${emoji} #Shorts`
+    );
+    if (habitat) candidates.push(
+      `Wild ${label} in ${place} ${emoji} #Shorts`,
+      `${label} Exploring ${place} ${emoji} #Shorts`,
+      `A ${label} Moment From ${place} ${emoji} #Shorts`
+    );
 
     candidates.push(
       `Wild ${label} Up Close ${emoji} #Shorts`,
       `${label} Caught on Camera ${emoji} #Shorts`,
-      `${label} Natural Behavior ${emoji} #Shorts`,
+      `${label} Natural Behavior in the Wild ${emoji} #Shorts`,
       `${label} Wildlife Encounter ${emoji} #Shorts`,
-      `${label} in Its Natural Habitat ${emoji} #Shorts`
+      `${label} in Its Natural Habitat ${emoji} #Shorts`,
+      `A Closer Look at Wild ${label} ${emoji} #Shorts`,
+      `Incredible ${label} Wildlife Moment ${emoji} #Shorts`,
+      `Watch a Wild ${label} in Action ${emoji} #Shorts`,
+      `${label} Roaming Free in Nature ${emoji} #Shorts`,
+      `Real ${label} Behavior in Nature ${emoji} #Shorts`,
+      `${label} Encounter in the Wild ${emoji} #Shorts`,
+      `This ${label} Moment Was Caught in the Wild ${emoji} #Shorts`,
+      `Wildlife Close-Up: ${label} ${emoji} #Shorts`,
+      `${label} Living Wild ${emoji} #Shorts`,
+      `Nature in Action: ${label} ${emoji} #Shorts`,
+      `A Rare Look at a Wild ${label} ${emoji} #Shorts`,
+      `${label} in the Wild — Natural Behavior ${emoji} #Shorts`,
+      `Amazing ${label} Moment From Nature ${emoji} #Shorts`,
+      `Wild ${label} Seen Up Close ${emoji} #Shorts`,
+      `${label} Wildlife Footage You Have to See ${emoji} #Shorts`
     );
 
+    const uniqueCandidates=[...new Set(candidates.map(x=>x.slice(0,100)))];
     const index = Math.max(0, Number(detail?.batchIndex || 0));
-    const rotated = [...candidates.slice(index % candidates.length), ...candidates.slice(0, index % candidates.length)];
-    const chosen = rotated.find(t => !used.has(t.toLowerCase())) || `${candidates[0]} ${Date.now().toString().slice(-3)}`;
+    const rotated = [...uniqueCandidates.slice(index % uniqueCandidates.length), ...uniqueCandidates.slice(0, index % uniqueCandidates.length)];
+    const chosen = rotated.find(t => !used.has(t.toLowerCase()));
 
-    return chosen.slice(0,100);
+    if(chosen) return chosen;
+
+    // Last-resort collision breaker. It stays descriptive instead of repeating an old title.
+    const suffix = String((Date.now() + index) % 100000).padStart(5,'0');
+    return `${label} Wildlife Encounter ${emoji} #Shorts ${suffix}`.slice(0,100);
   }
 
   function accurateHashtags(species) {
@@ -2988,7 +3024,7 @@
         '9:16 safe cover',
         'Captions',
         'Attribution',
-        'Duplicate history'
+        'Source + file fingerprint duplicate protection'
       ].forEach(label => {
         const chip=document.createElement('span');
         chip.textContent=label;
@@ -2998,7 +3034,7 @@
 
     const note=document.querySelector('#clipfreeSimpleStudio .simple-note');
     if (note) note.textContent=
-      'Growth Mode copies the STRUCTURE of your successful wildlife Shorts, not the same footage. It does not intentionally reuse previous sources or titles. SEO stays accurate to the actual animal/video; no unrelated high-volume keyword is inserted.';
+      'Growth Mode copies the STRUCTURE of your successful wildlife Shorts, not the same footage. It now checks source URLs AND a SHA-256 fingerprint of the downloaded source file before upload, and it avoids titles already used in ClipFree or loaded from your connected YouTube channel. SEO stays accurate to the actual animal/video.';
   },900);
 })();
 

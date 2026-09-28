@@ -87,7 +87,8 @@ async function downloadSource(item,index){ const response=await fetch(item.fileU
 
 function uniqueSuitableSources(items){ const seen=new Set(); return (items || []).filter(item=>{ const key=String(item?.sourceUrl || item?.fileUrl || item?.title || '').trim(); if(!key || seen.has(key)) return false; seen.add(key); return !item.size || item.size <= 28*1024*1024; }); }
 
-const CLIPFREE_SOURCE_HISTORY_KEY='clipfree_source_history_v5';
+const CLIPFREE_SOURCE_HISTORY_KEY='clipfree_source_history_v6';
+const CLIPFREE_MEDIA_HASH_HISTORY_KEY='clipfree_media_hash_history_v1';
 const CLIPFREE_VARIETY_CURSOR_KEY='clipfree_variety_cursor_v2';
 
 const VARIETY_QUERIES=[
@@ -131,7 +132,14 @@ const VARIETY_QUERIES=[
 'coastal wildlife','ocean wildlife','grassland wildlife','prairie wildlife','woodland wildlife'
 ];
 
-function sourceKey(item){ return String(item?.sourceUrl || item?.fileUrl || item?.title || '').trim(); }
+function sourceKeys(item){
+  return [...new Set([
+    String(item?.fileUrl || '').trim(),
+    String(item?.sourceUrl || '').trim(),
+    String(item?.title || '').trim()
+  ].filter(Boolean))];
+}
+function sourceKey(item){ return sourceKeys(item)[0] || ''; }
 
 function loadSourceHistory(){
   try{
@@ -141,12 +149,38 @@ function loadSourceHistory(){
 }
 
 function saveSourceHistory(set){
-  try{ localStorage.setItem(CLIPFREE_SOURCE_HISTORY_KEY,JSON.stringify([...set].slice(-5000))); }catch{}
+  try{ localStorage.setItem(CLIPFREE_SOURCE_HISTORY_KEY,JSON.stringify([...set].slice(-10000))); }catch{}
 }
 
 function rememberSource(item){
-  const key=sourceKey(item); if(!key) return;
-  const used=loadSourceHistory(); used.add(key); saveSourceHistory(used);
+  const used=loadSourceHistory();
+  for(const key of sourceKeys(item)) used.add(key);
+  saveSourceHistory(used);
+}
+
+function loadMediaHashHistory(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(CLIPFREE_MEDIA_HASH_HISTORY_KEY)||'[]');
+    return new Set(Array.isArray(raw)?raw.filter(Boolean):[]);
+  }catch{return new Set();}
+}
+
+function saveMediaHashHistory(set){
+  try{ localStorage.setItem(CLIPFREE_MEDIA_HASH_HISTORY_KEY,JSON.stringify([...set].slice(-5000))); }catch{}
+}
+
+function rememberMediaHash(hash){
+  if(!hash) return;
+  const used=loadMediaHashHistory();
+  used.add(hash);
+  saveMediaHashHistory(used);
+}
+
+async function mediaSha256(file){
+  if(!file?.arrayBuffer || !globalThis.crypto?.subtle) return '';
+  const buf=await file.arrayBuffer();
+  const digest=await crypto.subtle.digest('SHA-256',buf);
+  return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
 
 async function blockedSourceSet(){
@@ -180,8 +214,9 @@ async function findOneUnusedSource(query,blocked,alreadyChosen){
     let results=[];
     try{ results=await window.ClipFreeYouTube.searchCommonsDownloadable(q,20); }catch(err){ console.warn('Source search skipped',q,err); }
     for(const item of uniqueSuitableSources(results)){
-      const key=sourceKey(item);
-      if(!key || blocked.has(key) || alreadyChosen.has(key)) continue;
+      const keys=sourceKeys(item);
+      const key=keys[0] || '';
+      if(!key || keys.some(k=>blocked.has(k) || alreadyChosen.has(k))) continue;
       return item;
     }
   }
@@ -201,7 +236,7 @@ async function collectBatchSources({query,preset,batchCount,customTopic,varietyM
     const item=await findOneUnusedSource(queries[i],blocked,selectedKeys);
     if(item){
       selected.push(item);
-      selectedKeys.add(sourceKey(item));
+      for(const key of sourceKeys(item)) selectedKeys.add(key);
       continue;
     }
 
@@ -209,7 +244,7 @@ async function collectBatchSources({query,preset,batchCount,customTopic,varietyM
     const fallback=await findOneUnusedSource(preset.query,blocked,selectedKeys);
     if(fallback){
       selected.push(fallback);
-      selectedKeys.add(sourceKey(fallback));
+      for(const key of sourceKeys(fallback)) selectedKeys.add(key);
     }
   }
 
@@ -234,11 +269,61 @@ async function generateAnimalShort(){
 
     let soundItems=[]; if(useSounds){ setStatus('Finding real open-licensed animal sounds…',9); try{ soundItems=await searchCommonsAudio(preset.soundQuery || `${query} animal sound`,12); }catch(err){ console.warn('Animal audio search skipped',err); } }
 
+    const batchMediaHashes=new Set();
+    const persistentMediaHashes=loadMediaHashHistory();
+    const blockedKeys=await blockedSourceSet();
+    const reservedKeys=new Set();
+    for(const item of suitable) for(const key of sourceKeys(item)) reservedKeys.add(key);
+
     for(let batchIndex=0;batchIndex<batchCount;batchIndex++){
-      const baseProgress=10+Math.round((batchIndex/batchCount)*84); setStatus(`Short ${batchIndex+1}/${batchCount}: choosing one unique source video…`,baseProgress,'good');
-      const chosen=[suitable[batchIndex]]; renderSources(chosen);
-      const files=[]; setStatus(`Short ${batchIndex+1}/${batchCount}: downloading source video…`,baseProgress+3); try{ files.push(await downloadSource(chosen[0],0)); }catch(err){ console.warn(err); }
-      if(!files.length) throw new Error(`Short ${batchIndex+1}: the reusable source clip could not be downloaded on this device.`);
+      const baseProgress=10+Math.round((batchIndex/batchCount)*84);
+      setStatus(`Short ${batchIndex+1}/${batchCount}: choosing a genuinely different source video…`,baseProgress,'good');
+
+      let source=suitable[batchIndex];
+      let sourceFile=null;
+      let sourceHash='';
+      const triedKeys=new Set();
+
+      for(let attempt=0;attempt<10;attempt++){
+        for(const key of sourceKeys(source)) triedKeys.add(key);
+        renderSources([source]);
+        setStatus(`Short ${batchIndex+1}/${batchCount}: downloading and duplicate-checking source…`,baseProgress+3,'good');
+
+        try{
+          const candidate=await downloadSource(source,0);
+          const hash=await mediaSha256(candidate);
+
+          if(hash && (persistentMediaHashes.has(hash) || batchMediaHashes.has(hash))){
+            for(const key of sourceKeys(source)) blockedKeys.add(key);
+            const replacementExcluded=new Set([...reservedKeys,...triedKeys]);
+            const replacementQuery=varietyMode ? nextVarietyQueries(1)[0] : `${query} ${['nature','habitat','behavior','wild','animals','documentary'][attempt%6]}`;
+            source=await findOneUnusedSource(replacementQuery,blockedKeys,replacementExcluded)
+              || await findOneUnusedSource(preset.query,blockedKeys,replacementExcluded);
+            if(!source) break;
+            for(const key of sourceKeys(source)) reservedKeys.add(key);
+            continue;
+          }
+
+          sourceFile=candidate;
+          sourceHash=hash;
+          break;
+        }catch(err){
+          console.warn('Source download/check skipped',err);
+          for(const key of sourceKeys(source)) blockedKeys.add(key);
+          const replacementExcluded=new Set([...reservedKeys,...triedKeys]);
+          const replacementQuery=varietyMode ? nextVarietyQueries(1)[0] : `${query} wildlife`;
+          source=await findOneUnusedSource(replacementQuery,blockedKeys,replacementExcluded)
+            || await findOneUnusedSource(preset.query,blockedKeys,replacementExcluded);
+          if(!source) break;
+          for(const key of sourceKeys(source)) reservedKeys.add(key);
+        }
+      }
+
+      if(!sourceFile) throw new Error(`Short ${batchIndex+1}: ClipFree could not find a genuinely different unused source after duplicate checking. It stopped instead of uploading the same footage again.`);
+
+      const chosen=[source];
+      const files=[sourceFile];
+      if(sourceHash) batchMediaHashes.add(sourceHash);
 
       let soundItem=null,audioFile=null; if(useSounds && soundItems.length){ soundItem=soundItems[batchIndex % soundItems.length]; setStatus(`Short ${batchIndex+1}/${batchCount}: adding real animal sound…`,baseProgress+9,'good'); try{ audioFile=await downloadAudio(soundItem,batchIndex); }catch(err){ console.warn('Animal sound download skipped',err); soundItem=null; } }
 
@@ -246,11 +331,15 @@ async function generateAnimalShort(){
       const montage=await window.ClipFreeAutomation.createMontageFromFiles(files,{duration,audioFile,filename:`clipfree-${activePreset}-short-${batchIndex+1}.mp4`});
       if(!montage.clipfreeUsedAnimalSound) soundItem=null;
       const meta=buildMeta(preset,style,customTopic,chosen,soundItem,batchIndex,duration);
-      setStatus(`Short ${batchIndex+1}/${batchCount}: SEO, captions, thumbnail + YouTube upload…`,baseProgress+18,'good');
+      setStatus(`Short ${batchIndex+1}/${batchCount}: unique SEO title, captions, thumbnail + YouTube upload…`,baseProgress+18,'good');
       const uploadResult=await window.ClipFreeYouTube.startFullAutoWithFile(montage,meta);
       if(!uploadResult?.id) throw new Error(`Short ${batchIndex+1}: YouTube did not return a video ID, so it is not counted as uploaded.`);
-      rememberSource(chosen[0]);
-      setStatus(`Short ${batchIndex+1}/${batchCount} confirmed on YouTube. Source permanently added to the no-repeat history.`,baseProgress+24,'good');
+      rememberSource(source);
+      if(sourceHash){
+        rememberMediaHash(sourceHash);
+        persistentMediaHashes.add(sourceHash);
+      }
+      setStatus(`Short ${batchIndex+1}/${batchCount} confirmed on YouTube. Footage fingerprint + source permanently added to no-repeat history.`,baseProgress+24,'good');
     }
     setStatus(`${batchCount} animal Short${batchCount===1?'':'s'} confirmed on YouTube ❤️`,100,'good');
   }catch(err){ console.error(err); setStatus(err?.message || String(err),0,'bad'); }
