@@ -347,10 +347,39 @@
   insertTwentyCard();
 
   const rights = $('clipfree20Rights');
-  rights?.addEventListener('change', () => {
+
+  // RIGHTS FIX v8:
+  // The final single-screen cleanup removes the old 20-Short card from the DOM.
+  // Earlier code kept a reference to that removed checkbox, so it could stay
+  // false even when the VISIBLE Simple Studio checkbox was ticked.
+  function rightsConfirmed() {
+    return Boolean(
+      $('simpleRights')?.checked ||
+      $('autoUploadCertification')?.checked ||
+      $('clipfree20Rights')?.checked
+    );
+  }
+
+  function syncRightsEverywhere(value) {
+    const checked = Boolean(value);
+    const simple = $('simpleRights');
     const official = $('autoUploadCertification');
-    if (official) official.checked = Boolean(rights.checked);
+    const legacy = $('clipfree20Rights');
+    if (simple) simple.checked = checked;
+    if (official) official.checked = checked;
+    if (legacy) legacy.checked = checked;
+  }
+
+  rights?.addEventListener('change', () => {
+    syncRightsEverywhere(rights.checked);
   });
+
+  document.addEventListener('change', event => {
+    const id = event?.target?.id;
+    if (id === 'simpleRights' || id === 'autoUploadCertification' || id === 'clipfree20Rights') {
+      syncRightsEverywhere(Boolean(event.target.checked));
+    }
+  }, true);
 
   function setBulkStatus(text, done = bulk.completed, kind = '') {
     const status = $('clipfree20Status');
@@ -415,14 +444,13 @@
       return;
     }
 
-    if (!rights?.checked && requested > NATIVE_BATCH_MAX) {
-      alert('Tick the rights / Community Guidelines confirmation in the 20 Stunning Shorts card first.');
-      document.querySelector('#clipfree20AnimalCard')?.scrollIntoView({behavior:'smooth',block:'center'});
+    if (!rightsConfirmed() && requested > NATIVE_BATCH_MAX) {
+      alert('Tick the visible rights / Community Guidelines confirmation first.');
+      $('simpleRights')?.scrollIntoView({behavior:'smooth',block:'center'});
       return;
     }
 
-    const officialRights = $('autoUploadCertification');
-    if (officialRights && rights?.checked) officialRights.checked = true;
+    syncRightsEverywhere(true);
 
     const chunks = splitBatches(requested);
     const originalValue = select.value;
@@ -515,7 +543,7 @@
 
   // Keep the legal confirmation synchronized in both directions.
   $('autoUploadCertification')?.addEventListener('change', () => {
-    if (rights) rights.checked = Boolean($('autoUploadCertification')?.checked);
+    syncRightsEverywhere(Boolean($('autoUploadCertification')?.checked));
   });
 
   /* ------------------------- QUOTA SAVER ------------------------- */
