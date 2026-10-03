@@ -1272,8 +1272,12 @@ window.addEventListener('clipfree-export-ready', async (event) => {
     else if (complianceFast && els.uploadPlaylist) els.uploadPlaylist.value = '';
 
     els.uploadPrivacy.value = autoPrivacyValue();
-    els.uploadCaptions.checked = true;
-    if (els.uploadThumbnail) els.uploadThumbnail.checked = true;
+
+    // For the reviewer demo, generated captions/cover are shown in the audit
+    // panel, but the main video upload is prioritized so optional API uploads
+    // cannot consume bandwidth or delay the real video ID.
+    els.uploadCaptions.checked = !complianceFast;
+    if (els.uploadThumbnail) els.uploadThumbnail.checked = !complianceFast;
     setAutoStatus('Uploading to YouTube', 80, 'Uploading the finished Short to your channel. New/unverified API projects may force it to Private.', 'good');
     updateQueueJob(state.currentQueueId, { status:'uploading', message:`Uploading as ${autoPrivacyValue()}` });
     const result = await uploadWithSafeRetries({ rethrow: true });

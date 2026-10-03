@@ -3071,6 +3071,19 @@
     event.stopImmediatePropagation();
 
     const species=detectSpecies(detail);
+
+    if (window.CLIPFREE_COMPLIANCE_RECORDING_MODE && !species) {
+      detail.__clipfreeGrowthFinalReady = false;
+      const msg = 'Compliance safety stopped this Short: the source metadata does not identify an animal clearly enough. ClipFree will search again instead of uploading unrelated footage.';
+      const status = $('animalGeneratorStatus') || $('simpleStatus');
+      if (status) {
+        status.textContent = msg;
+        status.className = 'notice bad';
+      }
+      console.error(msg, detail?.sources || []);
+      return;
+    }
+
     const text=sourceText(detail);
     const action=detectAction(text);
     const habitat=detectHabitat(text);

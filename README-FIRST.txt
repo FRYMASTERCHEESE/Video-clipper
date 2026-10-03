@@ -1,63 +1,74 @@
-ClipFree AI — COMPLIANCE + 10-SECOND + TURBO UPLOAD v10
+ClipFree AI — STRICT ANIMAL + AUDIT TURBO v11
 3 October 2026
 
-UPLOAD / REPLACE THESE 7 FILES:
+I FIXED THE WRONG-VIDEO PROBLEM SHOWN IN YOUR SCREENSHOT.
+
+The uploaded Short showed unrelated objects while ClipFree labelled it as a
+"Wild Animal". That happened because broad wildlife searches could still accept
+a Public Domain/CC0 result whose metadata did NOT identify an animal.
+
+UPLOAD / REPLACE THESE 6 FILES:
 - index.html
 - youtube.js
-- category-pages.js
 - animal-generator.js
+- category-pages.js
 - video-engine-v7.js
-- ai-voiceover.js
-- compliance-demo-v10.js   NEW
+- compliance-demo-v11.js   NEW
 
-After this version is uploaded, open:
-https://coreyvibe.org/?audit=1
+You can ignore/delete compliance-demo-v10.js after uploading because the new
+index.html no longer loads it.
 
-THE AUDIT PAGE SHOWS REAL:
-- ClipFree AI / API client identity
-- connected YouTube channel
-- authorized YouTube Analytics
-- reusable media source + licence/attribution
-- generated 9:16 Short
-- original AI voiceover status
-- generated captions
-- generated thumbnail/cover
-- title + description + tags + hashtags
-- real YouTube video ID
-- requested/actual privacy + processing status
-- button to open YouTube Studio
+STRICT FOOTAGE SAFETY
+- Every wildlife source must identify a recognized animal in its own
+  title/attribution before ClipFree can render it.
+- Species-specific searches must match the requested species.
+- A lion search cannot silently upload a bottle, scenery, another animal, etc.
+- Unidentified "generic wildlife" media is rejected instead of being uploaded.
+- The final Growth Engine has an extra compliance-mode species check.
 
-It does NOT display OAuth access tokens, passwords or client secrets.
+SAFER AUDIT RECORDING
+Open:
+  https://coreyvibe.org/?audit=1
 
-10-SECOND SHORTS
-- 10 seconds is now available in the main Simple Studio.
-- 10 seconds is available in the underlying animal generator.
-- video engine and AI narration now support 10-second Shorts.
-- compliance mode automatically prepares ONE 10-second Private Short.
+The audit setup now forces:
+- exactly 1 Short
+- exactly 10 seconds
+- Private visibility
+- Lions as the exact demo animal
 
-UPLOAD SPEED IMPROVEMENTS
-- foreground YouTube processing wait: 12 seconds -> 6 seconds
-- slow processing continues in the background
-- captions, thumbnail and playlist finishing no longer block the next step
-- channel/analytics refresh is debounced instead of running after every upload
-- compliance mode skips playlist creation before the main video upload
-- existing single-pass H.264 encoder remains active
+That makes the reviewer recording deterministic instead of using the broad
+"Different animals" search.
 
-These changes remove unnecessary waiting inside ClipFree. Internet upload speed
-and YouTube's own server processing speed are still outside ClipFree's control.
+FASTER AUDIT UPLOAD
+For the 10-second reviewer demo only:
+- 720x1280 vertical HD
+- H.264 CRF 24
+- video max rate about 2.2 Mbps
+- AAC 128 kbps
+- single-pass encode
+- generated captions and cover are shown in the compliance panel, but their
+  optional separate YouTube API uploads are disabled during the demo so they
+  cannot compete for bandwidth or delay the real video ID
+- no playlist creation before the video upload
+- YouTube foreground processing wait remains only 6 seconds; slow processing
+  continues in the background
 
-FINAL RECORDING
-1. Close old coreyvibe.org tabs.
+Normal ClipFree creator mode keeps the higher-quality adaptive profiles.
+
+IMPORTANT
+No browser code can make YouTube's servers or your internet connection upload
+faster than the available network bandwidth. v11 reduces the audit file size
+and removes unnecessary API/network work around the main upload.
+
+RECORD AGAIN ONLY AFTER THIS VERSION IS LIVE:
+1. Fully close all old coreyvibe.org tabs.
 2. Open https://coreyvibe.org/?audit=1
 3. Refresh YouTube + Analytics.
-4. Show connected channel + real analytics.
-5. Set up 1 Private 10-second Short.
-6. Show source / licence / attribution.
-7. Manually tick the rights confirmation.
-8. Create the Short.
-9. Show generated video/audio/captions/cover + metadata.
+4. Tap Set up 1 Private 10-second Short.
+5. Confirm it says Lions.
+6. Show the source title/licence.
+7. Tick the rights box manually.
+8. Create/upload.
+9. Confirm the generated Short actually shows a lion.
 10. Wait for a real YouTube video ID.
-11. Open YouTube Studio and show the same video.
-
-If YouTube's daily upload limit is still active, wait for it to reset before
-making the final screencast.
+11. Open YouTube Studio and show that same Private Short.

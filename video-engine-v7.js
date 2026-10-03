@@ -24,12 +24,20 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     const memory = Number(navigator.deviceMemory || 4);
     const cores = Number(navigator.hardwareConcurrency || 4);
 
-    // 1080p only on stronger devices. 720p remains sharp for Shorts and is
-    // considerably faster/more reliable in FFmpeg WASM on lower-memory phones.
+    // Compliance recording prioritizes a small, fast-uploading MP4 while keeping
+    // true vertical HD. Normal creator mode keeps the stronger adaptive profile.
+    if (window.CLIPFREE_COMPLIANCE_RECORDING_MODE) {
+      return {
+        width:720, height:1280, fps:30, crf:24, preset:'superfast',
+        maxrate:'2200k', bufsize:'4400k', audioBitrate:'128k',
+        label:'720p Audit Turbo'
+      };
+    }
+
     const high = memory >= 8 && cores >= 8;
     return high
-      ? { width:1080, height:1920, fps:30, crf:21, preset:'superfast', label:'1080p HQ' }
-      : { width:720, height:1280, fps:30, crf:20, preset:'superfast', label:'720p HQ Turbo' };
+      ? { width:1080, height:1920, fps:30, crf:21, preset:'superfast', audioBitrate:'192k', label:'1080p HQ' }
+      : { width:720, height:1280, fps:30, crf:20, preset:'superfast', audioBitrate:'192k', label:'720p HQ Turbo' };
   }
 
   async function ensureFastFFmpeg() {
@@ -121,6 +129,10 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
 
     status(`Encoding ${profile.label} once — video + narration together…`);
 
+    const videoRateArgs = profile.maxrate
+      ? ['-maxrate', profile.maxrate, '-bufsize', profile.bufsize]
+      : [];
+
     await ff.exec([
       '-i', sourceName,
       '-i', audioName,
@@ -132,6 +144,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
       '-c:v', 'libx264',
       '-preset', profile.preset,
       '-crf', String(profile.crf),
+      ...videoRateArgs,
       '-pix_fmt', 'yuv420p',
       '-profile:v', 'high',
       '-level', '4.1',
@@ -144,7 +157,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
       '-colorspace', 'bt709',
 
       '-c:a', 'aac',
-      '-b:a', '192k',
+      '-b:a', profile.audioBitrate || '192k',
       '-ar', '48000',
       '-ac', '2',
       // Never loop spoken narration. If it finishes early, pad with silence.

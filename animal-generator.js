@@ -132,6 +132,157 @@ const VARIETY_QUERIES=[
 'coastal wildlife','ocean wildlife','grassland wildlife','prairie wildlife','woodland wildlife'
 ];
 
+// STRICT SOURCE VALIDATION v11
+// Never render/upload a wildlife source unless its own title/attribution
+// identifies an animal. Species-specific searches must match that species.
+const SOURCE_ANIMALS = [
+  ['mountain lion', /\b(mountain lion|cougar|puma)\b/i],
+  ['lion', /\b(lion|lioness|panthera leo)\b/i],
+  ['tiger', /\b(tiger|panthera tigris)\b/i],
+  ['leopard', /\b(leopard|panthera pardus)\b/i],
+  ['cheetah', /\bcheetah\b/i],
+  ['jaguar', /\bjaguar\b/i],
+  ['lynx', /\blynx\b/i],
+  ['bobcat', /\bbobcat\b/i],
+  ['wolf', /\b(wolf|wolves|canis lupus)\b/i],
+  ['coyote', /\bcoyote\b/i],
+  ['fox', /\b(fox|vulpes)\b/i],
+  ['bear', /\b(bear|grizzly|ursus|polar bear)\b/i],
+  ['elephant', /\belephant\b/i],
+  ['giraffe', /\bgiraffe\b/i],
+  ['zebra', /\bzebra\b/i],
+  ['rhino', /\b(rhino|rhinoceros)\b/i],
+  ['hippo', /\b(hippo|hippopotamus)\b/i],
+  ['bison', /\b(bison|buffalo)\b/i],
+  ['moose', /\b(moose|alces)\b/i],
+  ['elk', /\belk\b/i],
+  ['deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
+  ['antelope', /\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+  ['goat', /\b(ibex|bighorn sheep|mountain goat)\b/i],
+  ['boar', /\b(wild boar|boar)\b/i],
+  ['kangaroo', /\bkangaroo\b/i],
+  ['wallaby', /\bwallaby\b/i],
+  ['koala', /\bkoala\b/i],
+  ['wombat', /\bwombat\b/i],
+  ['tasmanian devil', /\btasmanian devil\b/i],
+  ['platypus', /\bplatypus\b/i],
+  ['echidna', /\bechidna\b/i],
+  ['sloth', /\bsloth\b/i],
+  ['anteater', /\banteater\b/i],
+  ['armadillo', /\barmadillo\b/i],
+  ['capybara', /\bcapybara\b/i],
+  ['beaver', /\bbeaver\b/i],
+  ['otter', /\botter\b/i],
+  ['badger', /\bbadger\b/i],
+  ['wolverine', /\bwolverine\b/i],
+  ['raccoon', /\braccoon\b/i],
+  ['skunk', /\bskunk\b/i],
+  ['porcupine', /\bporcupine\b/i],
+  ['rabbit', /\b(rabbit|hare)\b/i],
+  ['squirrel', /\b(squirrel|chipmunk|marmot|prairie dog)\b/i],
+  ['gorilla', /\bgorilla\b/i],
+  ['chimpanzee', /\bchimpanzee\b/i],
+  ['orangutan', /\borangutan\b/i],
+  ['baboon', /\bbaboon\b/i],
+  ['macaque', /\bmacaque\b/i],
+  ['lemur', /\blemur\b/i],
+  ['gibbon', /\bgibbon\b/i],
+  ['monkey', /\b(monkey|howler|spider monkey)\b/i],
+  ['wild dog', /\bafrican wild dog\b/i],
+  ['hyena', /\b(hyena|hyaena)\b/i],
+  ['jackal', /\bjackal\b/i],
+  ['meerkat', /\bmeerkat\b/i],
+  ['mongoose', /\bmongoose\b/i],
+  ['camel', /\bcamel\b/i],
+  ['llama', /\bllama\b/i],
+  ['alpaca', /\balpaca\b/i],
+  ['horse', /\b(wild horse|horse)\b/i],
+  ['donkey', /\b(wild donkey|donkey)\b/i],
+  ['crocodile', /\bcrocodile\b/i],
+  ['alligator', /\balligator\b/i],
+  ['komodo dragon', /\bkomodo dragon\b/i],
+  ['iguana', /\biguana\b/i],
+  ['lizard', /\b(lizard|gecko|chameleon|monitor lizard)\b/i],
+  ['tortoise', /\btortoise\b/i],
+  ['turtle', /\b(sea turtle|turtle)\b/i],
+  ['snake', /\b(python|cobra|rattlesnake|boa constrictor|snake)\b/i],
+  ['eagle', /\beagle\b/i],
+  ['hawk', /\bhawk\b/i],
+  ['falcon', /\bfalcon\b/i],
+  ['osprey', /\bosprey\b/i],
+  ['owl', /\bowl\b/i],
+  ['vulture', /\bvulture\b/i],
+  ['condor', /\bcondor\b/i],
+  ['raven', /\braven\b/i],
+  ['crow', /\bcrow\b/i],
+  ['parrot', /\b(parrot|macaw)\b/i],
+  ['toucan', /\btoucan\b/i],
+  ['hornbill', /\bhornbill\b/i],
+  ['kingfisher', /\bkingfisher\b/i],
+  ['woodpecker', /\bwoodpecker\b/i],
+  ['hummingbird', /\bhummingbird\b/i],
+  ['flamingo', /\bflamingo\b/i],
+  ['pelican', /\bpelican\b/i],
+  ['heron', /\bheron\b/i],
+  ['stork', /\bstork\b/i],
+  ['crane', /\bcrane\b/i],
+  ['swan', /\bswan\b/i],
+  ['goose', /\bgoose\b/i],
+  ['duck', /\bduck\b/i],
+  ['penguin', /\bpenguin\b/i],
+  ['albatross', /\balbatross\b/i],
+  ['puffin', /\bpuffin\b/i],
+  ['seagull', /\bseagull\b/i],
+  ['shark', /\b(shark|great white|hammerhead|whale shark)\b/i],
+  ['whale', /\b(whale|orca)\b/i],
+  ['dolphin', /\bdolphin\b/i],
+  ['porpoise', /\bporpoise\b/i],
+  ['seal', /\b(seal|sea lion|walrus)\b/i],
+  ['manatee', /\bmanatee\b/i],
+  ['dugong', /\bdugong\b/i],
+  ['octopus', /\boctopus\b/i],
+  ['squid', /\bsquid\b/i],
+  ['jellyfish', /\bjellyfish\b/i],
+  ['seahorse', /\bseahorse\b/i],
+  ['ray', /\b(stingray|manta ray)\b/i],
+  ['eel', /\beel\b/i],
+  ['fish', /\b(salmon|trout|tuna|clownfish|reef fish|fish)\b/i],
+  ['frog', /\b(frog|tree frog)\b/i],
+  ['toad', /\btoad\b/i],
+  ['salamander', /\bsalamander\b/i],
+  ['newt', /\bnewt\b/i],
+  ['butterfly', /\bbutterfly\b/i],
+  ['dragonfly', /\bdragonfly\b/i],
+  ['bee', /\bbee\b/i],
+  ['beetle', /\bbeetle\b/i],
+  ['mantis', /\bmantis\b/i],
+  ['spider', /\bspider\b/i],
+  ['scorpion', /\bscorpion\b/i],
+  ['crab', /\bcrab\b/i],
+  ['lobster', /\blobster\b/i],
+  ['cat', /\b(kitten|cat)\b/i],
+  ['dog', /\b(puppy|dog)\b/i]
+];
+
+function sourceAnimal(item){
+  const text = `${item?.title || ''} ${item?.attribution || ''} ${item?.creator || ''}`;
+  return SOURCE_ANIMALS.find(([,re]) => re.test(text)) || null;
+}
+
+function expectedAnimal(query){
+  const text = String(query || '');
+  return SOURCE_ANIMALS.find(([,re]) => re.test(text)) || null;
+}
+
+function sourceMatchesAnimalQuery(item, query){
+  const actual = sourceAnimal(item);
+  if(!actual) return false;
+  const expected = expectedAnimal(query);
+  if(!expected) return true;
+  return actual[0] === expected[0];
+}
+
+
 function sourceKeys(item){
   return [...new Set([
     String(item?.fileUrl || '').trim(),
@@ -213,7 +364,16 @@ async function findOneUnusedSource(query,blocked,alreadyChosen){
   for(const q of variants){
     let results=[];
     try{ results=await window.ClipFreeYouTube.searchCommonsDownloadable(q,20); }catch(err){ console.warn('Source search skipped',q,err); }
-    for(const item of uniqueSuitableSources(results)){
+    const candidates = uniqueSuitableSources(results)
+      .filter(item => sourceMatchesAnimalQuery(item, query))
+      .sort((a,b) => {
+        if (window.CLIPFREE_COMPLIANCE_RECORDING_MODE) {
+          return Number(a?.size || 999999999) - Number(b?.size || 999999999);
+        }
+        return 0;
+      });
+
+    for(const item of candidates){
       const keys=sourceKeys(item);
       const key=keys[0] || '';
       if(!key || keys.some(k=>blocked.has(k) || alreadyChosen.has(k))) continue;
@@ -287,6 +447,11 @@ async function generateAnimalShort(){
       setStatus(`Short ${batchIndex+1}/${batchCount}: choosing a genuinely different source video…`,baseProgress,'good');
 
       let source=suitable[batchIndex];
+
+      if(!sourceMatchesAnimalQuery(source, varietyMode ? (source?.title || query) : query)){
+        throw new Error(`Short ${batchIndex+1}: source validation rejected "${source?.title || 'unknown source'}" because its metadata does not identify the requested animal. ClipFree stopped before rendering or uploading unrelated footage.`);
+      }
+
       let sourceFile=null;
       let sourceHash='';
       const triedKeys=new Set();
