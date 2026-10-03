@@ -99,7 +99,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
   async function encodeSingleSource(sourceFile, audioFile, options = {}) {
     const ff = await ensureFastFFmpeg();
     const profile = deviceProfile();
-    const seconds = Math.max(12, Math.min(60, Number(options.duration) || 30));
+    const seconds = Math.max(10, Math.min(60, Number(options.duration) || 30));
 
     const sourceName = `v7_source.${inputExt(sourceFile)}`;
     const audioName = `v7_audio.${inputExt(audioFile) || 'wav'}`;
@@ -176,7 +176,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
   }
 
   function buildPreparedExport(file, meta = {}) {
-    const duration = Math.max(12, Math.min(60, Number(meta.targetDuration) || 30));
+    const duration = Math.max(10, Math.min(60, Number(meta.targetDuration) || 30));
     const captions = Array.isArray(meta.captions) ? [...meta.captions] : [];
     const attribution = String(meta.attribution || '').trim();
     const title = String(meta.title || meta.presetLabel || 'Wildlife Short').trim().slice(0,100);

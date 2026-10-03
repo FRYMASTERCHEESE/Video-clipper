@@ -927,7 +927,8 @@
 
             <label class="simple-field"><span>Length</span>
               <select id="simpleDuration">
-                <option value="15">About 15 seconds</option>
+                                <option value="10">About 10 seconds</option>
+<option value="15">About 15 seconds</option>
                 <option value="24">About 24 seconds</option>
                 <option value="30" selected>About 30 seconds</option>
                 <option value="45">About 45 seconds</option>
@@ -1106,7 +1107,7 @@
     const t = $('animalGeneratorStatus')?.textContent?.trim();
     const b = window.ClipFree20State;
     if (b?.active && b.total) {
-      return `${b.completed || 0}/${b.total} Shorts CONFIRMED on YouTube so far. ${t || 'ClipFree is working…'}`;
+      return `${b.completed || 0}/${b.total} Shorts uploaded to YouTube so far. ${t || 'ClipFree is working…'}`;
     }
     return t || 'ClipFree is working…';
   }
@@ -1176,6 +1177,16 @@
 
     try {
       const cfg = syncSimpleToEngine();
+
+      const uploadLimit = window.ClipFreeYouTube?.getUploadLimitStatus?.();
+      if (uploadLimit?.active) {
+        setSimpleStatus(
+          `YouTube's daily upload limit is still in its cooldown window. To avoid wasting video processing, ClipFree has paused new renders until about ${uploadLimit.untilText}.`,
+          'bad'
+        );
+        return;
+      }
+
       if (!cfg.rights) {
         setSimpleStatus('Tick the content-rights / Community Guidelines confirmation first.', 'bad');
         $('simpleRights')?.scrollIntoView({behavior:'smooth',block:'center'});

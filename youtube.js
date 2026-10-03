@@ -115,6 +115,19 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+let channelRefreshTimer = null;
+function scheduleChannelRefresh(delay = 12000) {
+  if (channelRefreshTimer) clearTimeout(channelRefreshTimer);
+  channelRefreshTimer = setTimeout(() => {
+    channelRefreshTimer = null;
+    if (!state.batchRunning && !state.autoUploadQueued && !state.autoUploadInFlight) {
+      refreshAllChannelData().catch(console.warn);
+    } else {
+      scheduleChannelRefresh(10000);
+    }
+  }, delay);
+}
+
 function retryableUploadError(err) {
   const status = Number(err?.status || 0);
   return status === 429 || (status >= 500 && status <= 599);
@@ -1240,10 +1253,24 @@ window.addEventListener('clipfree-export-ready', async (event) => {
   state.autoUploadInFlight = true;
 
   try {
-    setAutoStatus('Preparing YouTube upload', 76, 'Clip created. Preparing captions, thumbnail, attribution and Shorts playlist…', 'good');
-    const playlistId = await ensureAutoPlaylist().catch(err => { console.warn('Playlist setup failed', err); return ''; });
+    const complianceFast = Boolean(window.CLIPFREE_COMPLIANCE_RECORDING_MODE);
+    setAutoStatus(
+      'Preparing YouTube upload',
+      76,
+      complianceFast
+        ? 'Compliance demo: uploading the real Short first; optional finishing calls will not delay the video ID.'
+        : 'Clip created. Preparing captions, thumbnail, attribution and upload…',
+      'good'
+    );
+
+    const playlistId = complianceFast
+      ? ''
+      : await ensureAutoPlaylist().catch(err => { console.warn('Playlist setup failed', err); return ''; });
+
     renderPlaylistOptions();
     if (playlistId) els.uploadPlaylist.value = playlistId;
+    else if (complianceFast && els.uploadPlaylist) els.uploadPlaylist.value = '';
+
     els.uploadPrivacy.value = autoPrivacyValue();
     els.uploadCaptions.checked = true;
     if (els.uploadThumbnail) els.uploadThumbnail.checked = true;
@@ -1327,6 +1354,7 @@ async function xhrUpload(url, body, token, onProgress) {
       else {
         const err = new Error(data?.error?.message || data?.raw || `${xhr.status} ${xhr.statusText}`);
         err.status = xhr.status;
+        err.reason = data?.error?.errors?.[0]?.reason || data?.error?.status || '';
         reject(err);
       }
     };
@@ -1353,7 +1381,7 @@ async function readUploadedVideoState(videoId, token) {
   }
 }
 
-async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=12000, intervalMs=3000} = {}) {
+async function waitForYouTubeProcessing(videoId, token, {maxWaitMs=6000, intervalMs=2000} = {}) {
   const started = Date.now();
   let last = null;
 
@@ -1392,6 +1420,10 @@ function emitUploadStateEvent(name, detail) {
 }
 
 function markTransferred(videoId, title, requestedPrivacy) {
+  window.ClipFreeLastUpload = {
+    videoId, title, requestedPrivacy, actualPrivacy:'', processingStatus:'pending',
+    transferredAt:new Date().toISOString()
+  };
   const s = window.ClipFreeYouTubeProcessingState;
   if (!s.transferredIds.includes(videoId)) {
     s.transferredIds.push(videoId);
@@ -1404,6 +1436,11 @@ function markTransferred(videoId, title, requestedPrivacy) {
 }
 
 function markConfirmed(videoId, title, requestedPrivacy, actualPrivacy) {
+  window.ClipFreeLastUpload = {
+    ...(window.ClipFreeLastUpload || {}),
+    videoId, title, requestedPrivacy, actualPrivacy:actualPrivacy || requestedPrivacy,
+    processingStatus:'succeeded', confirmedAt:new Date().toISOString()
+  };
   const s = window.ClipFreeYouTubeProcessingState;
   s.pendingIds = s.pendingIds.filter(id => id !== videoId);
   if (!s.confirmedIds.includes(videoId)) {
@@ -1417,6 +1454,11 @@ function markConfirmed(videoId, title, requestedPrivacy, actualPrivacy) {
 }
 
 function markProcessingFailed(videoId, title, message) {
+  window.ClipFreeLastUpload = {
+    ...(window.ClipFreeLastUpload || {}),
+    videoId, title, processingStatus:'failed', message:String(message || ''),
+    failedAt:new Date().toISOString()
+  };
   const s = window.ClipFreeYouTubeProcessingState;
   s.pendingIds = s.pendingIds.filter(id => id !== videoId);
   if (!s.failedIds.includes(videoId)) {
@@ -1449,7 +1491,54 @@ async function watchYouTubeProcessingInBackground(videoId, token, title, request
   }
 }
 
+
+const UPLOAD_LIMIT_KEY = 'clipfree_youtube_upload_limit_until_v1';
+
+function getUploadLimitStatus() {
+  let until = 0;
+  try { until = Number(localStorage.getItem(UPLOAD_LIMIT_KEY) || 0); } catch {}
+  if (until && Date.now() >= until) {
+    try { localStorage.removeItem(UPLOAD_LIMIT_KEY); } catch {}
+    until = 0;
+  }
+  return {
+    active: until > Date.now(),
+    until,
+    untilText: until ? new Date(until).toLocaleString() : ''
+  };
+}
+
+function rememberUploadLimit(err) {
+  const reason = String(err?.reason || '');
+  const message = String(err?.message || '');
+  if (!/uploadLimitExceeded/i.test(reason) &&
+      !/exceeded the number of videos/i.test(message) &&
+      !/daily upload limit/i.test(message)) {
+    return null;
+  }
+
+  // YouTube documents a 24-hour wait after some daily feature limits are hit.
+  // Store a conservative local cooldown so ClipFree does not waste time
+  // rendering 10–20 videos that YouTube will immediately reject.
+  const until = Date.now() + (24 * 60 * 60 * 1000);
+  try { localStorage.setItem(UPLOAD_LIMIT_KEY, String(until)); } catch {}
+  return until;
+}
+
+function clearRememberedUploadLimit() {
+  try { localStorage.removeItem(UPLOAD_LIMIT_KEY); } catch {}
+}
+
 async function uploadToYouTube(options = {}) {
+  const knownLimit = getUploadLimitStatus();
+  if (knownLimit.active) {
+    const err = new Error(`YouTube's daily upload limit was reached recently. To avoid wasting another render, ClipFree has paused uploads until about ${knownLimit.untilText}.`);
+    err.reason = 'uploadLimitExceeded';
+    if (options?.rethrow) throw err;
+    setNotice(els.uploadStatus, err.message, 'bad');
+    return null;
+  }
+
   const media = state.uploadFile || state.generatedExport?.blob || window.ClipFreeExport?.blob;
   if (!media) {
     const err = new Error('Choose or generate a video first.');
@@ -1496,6 +1585,7 @@ async function uploadToYouTube(options = {}) {
     });
     if (!result?.id) throw new Error('YouTube accepted the request but did not return a video ID. The upload is not counted as transferred.');
 
+    clearRememberedUploadLimit();
     markTransferred(result.id, metadata.snippet.title, requestedPrivacy);
 
     setNotice(els.uploadStatus, 'Upload transferred to YouTube. Checking whether processing finishes quickly…');
@@ -1549,8 +1639,11 @@ async function uploadToYouTube(options = {}) {
       );
     }
     if (finishing.length) {
-      setNotice(els.uploadStatus, 'Finishing captions, cover and playlist in parallel…');
-      await Promise.allSettled(finishing);
+      setNotice(els.uploadStatus, 'Video uploaded. Captions, cover and playlist are finishing in the background…');
+      Promise.allSettled(finishing).then(results => {
+        const rejected = results.filter(x => x.status === 'rejected').length;
+        if (rejected) console.warn(`${rejected} optional YouTube finishing task(s) did not complete.`);
+      }).catch(console.warn);
     }
     els.uploadProgress.style.width = '100%';
     const watchLink = `https://www.youtube.com/watch?v=${result.id}`;
@@ -1572,10 +1665,15 @@ async function uploadToYouTube(options = {}) {
     if (result.processingStatus === 'succeeded') {
       markConfirmed(result.id, metadata.snippet.title, requestedPrivacy, actualPrivacy);
     }
-    setTimeout(() => refreshAllChannelData().catch(console.warn), 1500);
+    scheduleChannelRefresh(12000);
     return result;
   } catch (err) {
     console.error(err);
+    const limitUntil = rememberUploadLimit(err);
+    if (limitUntil) {
+      err.message = `YouTube rejected the upload because this channel has reached its daily video-upload limit. ClipFree will stop retrying and avoid rendering more videos. Try again after about ${new Date(limitUntil).toLocaleString()}.`;
+      err.reason = 'uploadLimitExceeded';
+    }
     els.uploadProgress.style.width = '0%';
     setNotice(els.uploadStatus, err.message || String(err), 'bad');
     if (options?.rethrow) throw err;
@@ -1667,6 +1765,25 @@ window.ClipFreeYouTube = {
   getUploadedSourceUrls,
   getKnownVideoTitles: () => (state.videos || []).map(v => String(v?.snippet?.title || '').trim()).filter(Boolean),
   getChannelTitle: () => state.channel?.snippet?.title || '',
+  getUploadLimitStatus,
+  getComplianceSnapshot: () => ({
+    connected: Boolean(state.accessToken && Date.now() < state.expiresAt),
+    channelTitle: state.channel?.snippet?.title || '',
+    channelId: state.channel?.id || '',
+    subscribers: state.channel?.statistics?.subscriberCount || '',
+    totalViews: state.channel?.statistics?.viewCount || '',
+    publicVideos: state.channel?.statistics?.videoCount || '',
+    recentVideosLoaded: (state.videos || []).length,
+    analytics: {
+      views: els.metricViews?.textContent || '—',
+      watchHours: els.metricWatch?.textContent || '—',
+      averageViewDuration: els.metricAvg?.textContent || '—',
+      netSubscribers: els.metricSubs?.textContent || '—'
+    },
+    uploadLimit: getUploadLimitStatus(),
+    processing: { ...(window.ClipFreeYouTubeProcessingState || {}) },
+    lastUpload: window.ClipFreeLastUpload ? { ...window.ClipFreeLastUpload } : null
+  })
 };
 
 loadSettings();

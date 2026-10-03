@@ -259,7 +259,7 @@ async function generateAnimalShort(){
   if(running) return;
   if(!window.ClipFreeYouTube?.searchCommonsDownloadable || !window.ClipFreeAutomation?.createMontageFromFiles){ setStatus('The video tools are still loading. Wait a few seconds and try again.',0,'bad'); return; }
   running=true; generateButton.disabled=true;
-  const preset=PRESETS[activePreset] || PRESETS.lions; const style=styleSelect?.value || 'documentary'; const duration=Math.max(12,Math.min(60,Number(durationSelect?.value)||30)); const batchCount=Math.max(1,Math.min(8,Number(batchSelect?.value)||1)); const useSounds=true; const customTopic=(topicInput?.value || '').trim(); const query=customTopic || preset.query;
+  const preset=PRESETS[activePreset] || PRESETS.lions; const style=styleSelect?.value || 'documentary'; const duration=Math.max(10,Math.min(60,Number(durationSelect?.value)||30)); const batchCount=Math.max(1,Math.min(8,Number(batchSelect?.value)||1)); const useSounds=true; const customTopic=(topicInput?.value || '').trim(); const query=customTopic || preset.query;
   try{
     const varietyMode=Boolean(window.ClipFreeVarietyMode);
     setStatus(varietyMode

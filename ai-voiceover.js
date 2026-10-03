@@ -194,7 +194,7 @@
   }
 
   function fitNarration(options) {
-    const duration = Math.max(12, Number(options.duration) || 24);
+    const duration = Math.max(10, Number(options.duration) || 30);
     const text = sourceText(options.source, options.preset, options.customTopic);
     const animal = sourceLabel(options.source, options.preset, options.customTopic);
     const action = detect(ACTIONS, text, '');
@@ -225,7 +225,7 @@
 
     // Aim for roughly 85–90% of the Short. The v7 video engine pads silence
     // after narration instead of looping or cutting spoken words.
-    const targetWords = Math.max(28, Math.round(duration * 1.9));
+    const targetWords = Math.max(16, Math.round(duration * 1.75));
     const chosen = [];
     let count = 0;
 
@@ -289,7 +289,7 @@
   }
 
   window.ClipFreeVoiceover = {
-    version: '7.0',
+    version: '10.0',
     generate,
     buildNarration: fitNarration,
     voices: [...VOICES],
