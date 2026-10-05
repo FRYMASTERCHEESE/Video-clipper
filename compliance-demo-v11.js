@@ -897,3 +897,242 @@
 
   window.addEventListener('clipfree-youtube-ready', () => setTimeout(patch, 0));
 })();
+
+/* CLIPFREE 20-SEQUENTIAL v14 */
+/*
+  Reliable mobile 1–20 mode.
+  For counts above 8, this final patch runs ONE Short at a time instead of 8+8+4.
+  Each Short must receive a real YouTube video ID before the next one starts.
+  The exact first failure is shown instead of replacing it with a generic 0/20 message.
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  const TOPICS = {
+    wildlife:  {preset:'wildlife', query:'clipfree variety wildlife'},
+    lions:     {preset:'lions',    query:'lion wildlife'},
+    moose:     {preset:'wildlife', query:'moose wildlife alces alces'},
+    tigers:    {preset:'wildlife', query:'tiger wildlife panthera tigris'},
+    elephants: {preset:'wildlife', query:'elephant wildlife safari'},
+    wolves:    {preset:'wildlife', query:'wolf wildlife canis lupus'},
+    bears:     {preset:'wildlife', query:'bear wildlife nature'},
+    kittens:   {preset:'kittens',  query:'cute kittens playing'},
+    puppies:   {preset:'puppies',  query:'cute puppies playing'}
+  };
+
+  let running20 = false;
+
+  function setValue(id, value) {
+    const el = $(id);
+    if (!el) return;
+    el.value = String(value);
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }
+
+  function setSimpleStatus(text, kind = '') {
+    const el = $('simpleStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className = `simple-status ${kind}`.trim();
+  }
+
+  function setProgress(done, total) {
+    const bar = $('simpleProgress');
+    if (bar) bar.style.width = `${Math.max(0, Math.min(100, (done / Math.max(1,total)) * 100))}%`;
+  }
+
+  function transferredCount() {
+    const direct = Number(window.ClipFreeYouTubeProcessingState?.transferred || 0);
+    const tracker = Number(window.ClipFreeTransferredUploadState?.total || 0);
+    return Math.max(direct, tracker);
+  }
+
+  function lastRealError() {
+    const candidates = [
+      $('animalGeneratorStatus')?.textContent,
+      $('youtubeUploadStatus')?.textContent,
+      window.ClipFreeTransferredUploadState?.lastError,
+      window.ClipFreeConfirmedUploadState?.lastError,
+      window.ClipFreeYouTubeProcessingState?.lastError
+    ];
+    return candidates
+      .map(x => String(x || '').trim())
+      .find(x =>
+        x &&
+        !/uploaded with sound|ready|working|creating|choosing|finding|downloading|uploading|processing continues/i.test(x)
+      ) || '';
+  }
+
+  function syncSimpleSettingsToOne() {
+    const topicKey = $('simpleTopic')?.value || 'wildlife';
+    const topic = TOPICS[topicKey] || TOPICS.wildlife;
+    const style = $('simpleStyle')?.value || 'documentary';
+    const duration = Math.max(10, Math.min(60, Number($('simpleDuration')?.value || 30)));
+    const privacy = $('simplePrivacy')?.value || 'private';
+
+    window.ClipFreeVarietyMode = topicKey === 'wildlife';
+
+    document.querySelector(`[data-animal-preset="${topic.preset}"]`)?.click();
+
+    setValue('animalTopic', topic.query);
+    setValue('animalStyle', style);
+    setValue('animalDuration', duration);
+    setValue('animalBatchCount', 1);
+    setValue('autoPrivacy', privacy);
+
+    const sound = $('animalSounds');
+    if (sound) {
+      sound.checked = true;
+      sound.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+
+    const rights = Boolean($('simpleRights')?.checked);
+    const autoRights = $('autoUploadCertification');
+    if (autoRights) autoRights.checked = rights;
+    const oldRights = $('clipfree20Rights');
+    if (oldRights) oldRights.checked = rights;
+
+    return {topicKey, topic, style, duration, privacy, rights};
+  }
+
+  async function waitForSingleCycle(button, timeoutMs = 45 * 60 * 1000) {
+    const start = Date.now();
+
+    while (!button.disabled && Date.now() - start < 8000) {
+      await sleep(80);
+    }
+
+    if (!button.disabled) {
+      throw new Error('ClipFree could not start the Short generator. Refresh the page and try again.');
+    }
+
+    while (button.disabled) {
+      if (Date.now() - start > timeoutMs) {
+        throw new Error('This Short took unusually long. ClipFree stopped the 20-Short run so completed uploads remain safe.');
+      }
+      await sleep(650);
+    }
+  }
+
+  async function runSequential(total) {
+    if (running20) return;
+    running20 = true;
+
+    const startButton = $('simpleStart');
+    const generateButton = $('generateAnimalVideo');
+    const requested = Math.max(1, Math.min(20, Number(total || 20)));
+
+    try {
+      const cfg = syncSimpleSettingsToOne();
+
+      if (!cfg.rights) {
+        throw new Error('Tick the content-rights / Community Guidelines confirmation first.');
+      }
+
+      if (!window.ClipFreeYouTube?.isConnected?.()) {
+        throw new Error('Connect YouTube first with the separate YouTube Connection + Analytics button.');
+      }
+
+      const limit = window.ClipFreeYouTube?.getUploadLimitStatus?.();
+      if (limit?.active) {
+        throw new Error(`YouTube's upload-limit cooldown is active until about ${limit.untilText}.`);
+      }
+
+      if (!generateButton) {
+        throw new Error('The Short generator is not available. Refresh ClipFree and try again.');
+      }
+
+      if (startButton) startButton.disabled = true;
+
+      const runStart = transferredCount();
+      let completed = 0;
+
+      setProgress(0, requested);
+      setSimpleStatus(
+        `Starting ${requested} Shorts in reliable sequential mode. ClipFree will create and upload ONE at a time and require a real YouTube video ID before continuing.`
+      );
+
+      for (let i = 0; i < requested; i++) {
+        syncSimpleSettingsToOne();
+        const before = transferredCount();
+
+        setSimpleStatus(
+          `Short ${i + 1}/${requested}: creating a unique moving Short. ${completed}/${requested} have real YouTube video IDs so far…`
+        );
+
+        generateButton.click();
+        await waitForSingleCycle(generateButton);
+
+        const after = transferredCount();
+        const gained = Math.max(0, after - before);
+
+        if (gained < 1) {
+          const exact = lastRealError();
+          throw new Error(
+            `Short ${i + 1}/${requested} did not receive a YouTube video ID. ` +
+            (exact || 'The run stopped here so ClipFree does not claim an upload that did not reach YouTube.')
+          );
+        }
+
+        completed += 1;
+        setProgress(completed, requested);
+
+        const confirmed = Number(window.ClipFreeYouTubeProcessingState?.confirmed || 0);
+        setSimpleStatus(
+          `${completed}/${requested} Shorts reached YouTube with real video IDs ❤️ ` +
+          `${confirmed} total upload(s) have also finished YouTube processing. ` +
+          (completed < requested ? `Preparing Short ${completed + 1}/${requested}…` : 'Batch complete.'),
+          'good'
+        );
+
+        if (completed < requested) await sleep(900);
+      }
+
+      const gainedRun = Math.max(0, transferredCount() - runStart);
+      if (gainedRun < requested) {
+        throw new Error(
+          `ClipFree verified ${gainedRun}/${requested} real YouTube video IDs for this run. ` +
+          `It will not mark the batch complete unless all ${requested} are verified.`
+        );
+      }
+
+      setProgress(requested, requested);
+      setSimpleStatus(
+        `All ${requested}/${requested} Shorts reached YouTube and received real video IDs ❤️ YouTube may still be processing some in the background.`,
+        'good'
+      );
+    } catch (err) {
+      console.error('ClipFree sequential 20 mode stopped', err);
+      setSimpleStatus(err?.message || String(err), 'bad');
+    } finally {
+      if ($('simpleCount')) $('simpleCount').value = String(requested);
+      if (startButton) {
+        startButton.disabled = false;
+        startButton.textContent = `✨ CREATE + SEO + UPLOAD ${requested} SHORT${requested === 1 ? '' : 'S'}`;
+      }
+      running20 = false;
+    }
+  }
+
+  document.addEventListener('click', event => {
+    const target = event.target?.closest?.('#simpleStart');
+    if (!target) return;
+
+    const requested = Math.max(1, Math.min(20, Number($('simpleCount')?.value || 1)));
+    if (requested <= 8) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    runSequential(requested);
+  }, true);
+
+  window.ClipFreeSequential20 = {
+    version:'14.0',
+    run: () => runSequential(20),
+    active: () => running20
+  };
+})();

@@ -1,0 +1,25 @@
+ClipFree 20 Shorts v14 — MOBILE ONLY
+
+This keeps Motion Guard v13 and replaces the old 8+8+4 batch behavior with
+a safer sequential 20-Short runner.
+
+New behavior:
+- Runs 1 Short at a time until all 20 are done.
+- Every Short must receive a REAL YouTube video ID before the next starts.
+- Motion Guard v13 still blocks still-picture Shorts.
+- If any Short fails, ClipFree stops at that exact Short and shows the real error.
+- Successful uploads already completed are kept.
+- It never claims 20/20 unless all 20 real video IDs are verified.
+
+Replace this ONE repo file:
+  compliance-demo-v11.js
+
+Mobile steps:
+1. Download the ZIP or JS file.
+2. In FRYMASTERCHEESE/Video-clipper, replace compliance-demo-v11.js.
+3. Commit to main.
+4. Wait a few minutes.
+5. Fully close old coreyvibe.org tabs and reopen the site.
+6. Connect YouTube.
+7. Select 20, tick rights, and press Create + SEO + Upload 20 Shorts.
+8. Keep the browser tab open while the 20 sequential uploads run.
