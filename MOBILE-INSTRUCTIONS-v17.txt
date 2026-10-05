@@ -1,0 +1,32 @@
+ClipFree Fast Real Videos v17 — MOBILE ONLY
+
+This fixes the slow "finding a moving unused source" step.
+
+Why v16 was slow:
+It could fully download many candidate videos one-by-one before deciding whether
+they contained real movement.
+
+v17:
+- searches smaller real video files first
+- checks up to 3 candidates at the same time
+- streams only the video sections needed for motion checking
+- does NOT fully download every rejected candidate
+- uses short timeouts so one bad/slow source cannot hold the whole batch up
+- still rejects picture-only / repeated-frame videos
+- still keeps v15 sequential 2–20 uploads and Motion Guard safety
+
+Replace ONE file in GitHub:
+  compliance-demo-v11.js
+
+Then:
+1. Commit to main.
+2. Wait 1–2 minutes.
+3. Fully close old coreyvibe.org tabs.
+4. Reopen ClipFree.
+5. Connect YouTube.
+6. Try 8 Shorts again.
+7. Keep the tab open while it works.
+
+Actual rendering and internet upload time still depend on your phone, source file,
+connection speed and YouTube. The source-finding stage should no longer spend
+many minutes downloading rejected candidates.

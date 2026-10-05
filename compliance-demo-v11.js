@@ -1422,3 +1422,291 @@
 
   window.addEventListener('clipfree-youtube-ready', () => setTimeout(patch, 0));
 })();
+
+/* CLIPFREE FAST MOVING SOURCES v17 */
+/*
+  Speed fix for the "finding a moving unused source" step.
+
+  v16 downloaded candidate videos one-by-one before deciding whether they moved.
+  On mobile this could take many minutes.
+
+  v17 replaces that search path with:
+  - direct Wikimedia video search
+  - smaller candidate videos first
+  - remote/streamed motion checks instead of downloading every whole candidate
+  - 3 candidates checked in parallel
+  - short timeouts so one slow source cannot stall the batch
+  - only verified moving videos returned to ClipFree
+*/
+(() => {
+  'use strict';
+
+  const PATCH_FLAG = '__clipfreeFastMovingSourcesV17';
+  const CACHE = new Map();
+
+  const MAX_SOURCE_BYTES = 18 * 1024 * 1024;
+  const SEARCH_RESULTS = 18;
+  const MAX_VERIFY = 9;
+  const CONCURRENCY = 3;
+
+  function stripHtml(value = '') {
+    const box = document.createElement('div');
+    box.innerHTML = String(value || '');
+    return (box.textContent || box.innerText || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function metaValue(meta, key) {
+    return stripHtml(meta?.[key]?.value || '');
+  }
+
+  function commonsFilePageUrl(title) {
+    return `https://commons.wikimedia.org/wiki/${encodeURIComponent(String(title || '').replace(/ /g, '_')).replace(/%2F/g, '/')}`;
+  }
+
+  function reusableLicense(license = '') {
+    const value = String(license || '').toLowerCase();
+    return (
+      value.includes('public domain') ||
+      value.includes('cc0') ||
+      (
+        (value.includes('cc by') || value.includes('creative commons attribution')) &&
+        !value.includes('by-sa') &&
+        !value.includes('share alike')
+      )
+    );
+  }
+
+  function toItem(page) {
+    const info = page?.imageinfo?.[0] || {};
+    const meta = info.extmetadata || {};
+    const title = String(page?.title || 'Wikimedia Commons video').replace(/^File:/i, '');
+    const creator = metaValue(meta, 'Artist') || metaValue(meta, 'Credit') || 'Wikimedia Commons contributor';
+    const license = metaValue(meta, 'LicenseShortName') || metaValue(meta, 'UsageTerms') || 'See source page for licence';
+    const licenseUrl = metaValue(meta, 'LicenseUrl');
+    const sourceUrl = commonsFilePageUrl(page?.title || '');
+    return {
+      title,
+      creator,
+      license,
+      licenseUrl,
+      sourceUrl,
+      fileUrl: info.url || '',
+      thumbUrl: info.thumburl || '',
+      mime: info.mime || '',
+      size: Number(info.size || 0),
+      provider: 'Wikimedia Commons',
+      attribution: `“${title}” — ${creator}. Source: Wikimedia Commons. Licence: ${license}${licenseUrl ? ` (${licenseUrl})` : ''}. ${sourceUrl}`
+    };
+  }
+
+  async function searchCommonsFast(query) {
+    const url = new URL('https://commons.wikimedia.org/w/api.php');
+    const params = {
+      action:'query',
+      generator:'search',
+      gsrsearch:`${query} filetype:video filesize:<18432`,
+      gsrnamespace:'6',
+      gsrlimit:String(SEARCH_RESULTS),
+      prop:'imageinfo',
+      iiprop:'url|size|mime|mediatype|extmetadata',
+      iiurlwidth:'480',
+      format:'json',
+      formatversion:'2',
+      origin:'*'
+    };
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6500);
+
+    try {
+      const response = await fetch(url.toString(), {
+        mode:'cors',
+        cache:'no-store',
+        signal:controller.signal
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.error) {
+        throw new Error(data?.error?.info || `Wikimedia search failed (${response.status})`);
+      }
+
+      return (data?.query?.pages || [])
+        .map(toItem)
+        .filter(item =>
+          item.fileUrl &&
+          String(item.mime || '').startsWith('video/') &&
+          (!item.size || item.size <= MAX_SOURCE_BYTES) &&
+          reusableLicense(item.license)
+        )
+        .sort((a,b) => Number(a.size || 999999999) - Number(b.size || 999999999));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function waitFor(video, eventName, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      let timer = null;
+      const ok = () => { cleanup(); resolve(); };
+      const fail = () => { cleanup(); reject(new Error('video decode failed')); };
+      const cleanup = () => {
+        video.removeEventListener(eventName, ok);
+        video.removeEventListener('error', fail);
+        if (timer) clearTimeout(timer);
+      };
+      video.addEventListener(eventName, ok, {once:true});
+      video.addEventListener('error', fail, {once:true});
+      timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`${eventName} timed out`));
+      }, timeoutMs);
+    });
+  }
+
+  async function seek(video, t) {
+    const duration = Number(video.duration || 0);
+    const safe = Math.max(0.08, Math.min(Math.max(0.08, duration - 0.12), Number(t || 0)));
+    if (Math.abs(Number(video.currentTime || 0) - safe) < 0.04) return;
+    video.currentTime = safe;
+    await waitFor(video, 'seeked', 2400);
+  }
+
+  function sample(video, canvas, ctx) {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const out = new Float32Array(canvas.width * canvas.height);
+    let j = 0;
+    for (let i = 0; i < rgba.length; i += 4) {
+      out[j++] = rgba[i] * 0.299 + rgba[i + 1] * 0.587 + rgba[i + 2] * 0.114;
+    }
+    return out;
+  }
+
+  function diff(a, b) {
+    if (!a || !b || a.length !== b.length) return 0;
+    let total = 0;
+    for (let i = 0; i < a.length; i++) total += Math.abs(a[i] - b[i]);
+    return total / a.length;
+  }
+
+  async function verifyRemoteMoving(item) {
+    const key = String(item?.fileUrl || '');
+    if (!key) return false;
+    if (CACHE.has(key)) return CACHE.get(key);
+
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    canvas.width = 40;
+    canvas.height = 23;
+    const ctx = canvas.getContext('2d', {willReadFrequently:true});
+
+    try {
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      video.src = key;
+
+      await waitFor(video, 'loadedmetadata', 4800);
+
+      const duration = Number(video.duration || 0);
+      if (!Number.isFinite(duration) || duration < 1.5 || !video.videoWidth || !video.videoHeight) {
+        CACHE.set(key, false);
+        return false;
+      }
+
+      // Three streamed frame checks. Browser range requests fetch only the pieces
+      // needed for these timestamps instead of downloading the complete candidate.
+      const t1 = Math.max(0.12, Math.min(duration * 0.12, 0.8));
+      const t2 = Math.max(t1 + 0.45, Math.min(duration * 0.50, 2.2));
+      const t3 = Math.max(t2 + 0.45, Math.min(duration * 0.82, 4.0));
+
+      await seek(video, t1);
+      const a = sample(video, canvas, ctx);
+      await seek(video, t2);
+      const b = sample(video, canvas, ctx);
+      await seek(video, t3);
+      const c = sample(video, canvas, ctx);
+
+      const d1 = diff(a,b);
+      const d2 = diff(b,c);
+      const best = Math.max(d1,d2);
+      const avg = (d1+d2)/2;
+
+      // Blocks repeated still images while allowing calm/slow wildlife footage.
+      const moving = best >= 0.28 || avg >= 0.14;
+      CACHE.set(key, moving);
+
+      if (moving) {
+        item.__clipfreeMovingVideoVerified = true;
+        item.__clipfreeMotionScore = Number(best.toFixed(3));
+        item.__clipfreeMotionAverage = Number(avg.toFixed(3));
+      }
+
+      return moving;
+    } catch (err) {
+      console.warn('Fast moving-source check skipped candidate', item?.title || key, err);
+      CACHE.set(key, false);
+      return false;
+    } finally {
+      video.removeAttribute('src');
+      try { video.load(); } catch {}
+    }
+  }
+
+  async function verifyInParallel(items, wanted) {
+    const candidates = (items || []).slice(0, MAX_VERIFY);
+    const accepted = [];
+
+    for (let i = 0; i < candidates.length && accepted.length < wanted; i += CONCURRENCY) {
+      const group = candidates.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        group.map(async item => ({item, ok:await verifyRemoteMoving(item)}))
+      );
+
+      for (const result of results) {
+        if (result.status !== 'fulfilled' || !result.value.ok) continue;
+        accepted.push(result.value.item);
+        if (accepted.length >= wanted) break;
+      }
+    }
+
+    return accepted;
+  }
+
+  function patch() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt) return false;
+    if (yt[PATCH_FLAG]) return true;
+
+    yt.searchCommonsDownloadable = async function fastVerifiedMovingSources(query, limit = 12) {
+      const wanted = Math.max(1, Math.min(6, Number(limit || 1)));
+      const candidates = await searchCommonsFast(query);
+      const moving = await verifyInParallel(candidates, wanted);
+
+      if (!moving.length) {
+        console.warn('ClipFree v17 found no fast verified moving source for', query);
+      }
+
+      return moving;
+    };
+
+    yt[PATCH_FLAG] = true;
+    window.CLIPFREE_REAL_MOVING_SOURCES = {
+      version:'17.0',
+      enabled:true,
+      fast:true,
+      rule:'verify real moving wildlife video by streamed frame sampling before generation'
+    };
+    return true;
+  }
+
+  if (!patch()) {
+    const timer = setInterval(() => {
+      if (patch()) clearInterval(timer);
+    }, 150);
+    setTimeout(() => clearInterval(timer), 30000);
+  }
+
+  window.addEventListener('clipfree-youtube-ready', () => setTimeout(patch, 0));
+})();
