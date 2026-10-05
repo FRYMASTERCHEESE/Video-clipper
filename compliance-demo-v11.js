@@ -708,7 +708,7 @@
 
       // A genuinely repeated still frame is normally ~0. Real footage usually
       // clears this by a large margin even when the camera is mostly stationary.
-      const moving = best >= 0.90 || avg >= 0.45;
+      const moving = best >= 0.35 || avg >= 0.18;
       return {
         ok:true,
         moving,
@@ -898,18 +898,22 @@
   window.addEventListener('clipfree-youtube-ready', () => setTimeout(patch, 0));
 })();
 
-/* CLIPFREE 20-SEQUENTIAL v14 */
+
+/* CLIPFREE 1-20 SEQUENTIAL + AUTO-RETRY v15 */
 /*
-  Reliable mobile 1–20 mode.
-  For counts above 8, this final patch runs ONE Short at a time instead of 8+8+4.
-  Each Short must receive a real YouTube video ID before the next one starts.
-  The exact first failure is shown instead of replacing it with a generic 0/20 message.
+  Final mobile batch runner:
+  - handles EVERY multi-Short request (2–20), including 8
+  - creates/uploads one Short at a time
+  - requires a real YouTube video ID before moving to the next Short
+  - automatically retries the SAME slot when Motion Guard blocks a still source
+  - stops on real YouTube/auth/quota failures and shows the exact message
 */
 (() => {
   'use strict';
 
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const MAX_SOURCE_RETRIES = 6;
 
   const TOPICS = {
     wildlife:  {preset:'wildlife', query:'clipfree variety wildlife'},
@@ -923,7 +927,7 @@
     puppies:   {preset:'puppies',  query:'cute puppies playing'}
   };
 
-  let running20 = false;
+  let running = false;
 
   function setValue(id, value) {
     const el = $(id);
@@ -933,7 +937,7 @@
     el.dispatchEvent(new Event('change', {bubbles:true}));
   }
 
-  function setSimpleStatus(text, kind = '') {
+  function setStatus(text, kind = '') {
     const el = $('simpleStatus');
     if (!el) return;
     el.textContent = text;
@@ -942,37 +946,81 @@
 
   function setProgress(done, total) {
     const bar = $('simpleProgress');
-    if (bar) bar.style.width = `${Math.max(0, Math.min(100, (done / Math.max(1,total)) * 100))}%`;
+    if (bar) {
+      bar.style.width = `${Math.max(0, Math.min(100, (done / Math.max(1, total)) * 100))}%`;
+    }
   }
 
   function transferredCount() {
-    const direct = Number(window.ClipFreeYouTubeProcessingState?.transferred || 0);
-    const tracker = Number(window.ClipFreeTransferredUploadState?.total || 0);
-    return Math.max(direct, tracker);
+    return Math.max(
+      Number(window.ClipFreeYouTubeProcessingState?.transferred || 0),
+      Number(window.ClipFreeTransferredUploadState?.total || 0)
+    );
   }
 
-  function lastRealError() {
-    const candidates = [
+  function confirmedCount() {
+    return Math.max(
+      Number(window.ClipFreeYouTubeProcessingState?.confirmed || 0),
+      Number(window.ClipFreeConfirmedUploadState?.total || 0)
+    );
+  }
+
+  function currentMessages() {
+    return [
       $('animalGeneratorStatus')?.textContent,
       $('youtubeUploadStatus')?.textContent,
+      $('simpleStatus')?.textContent,
       window.ClipFreeTransferredUploadState?.lastError,
       window.ClipFreeConfirmedUploadState?.lastError,
       window.ClipFreeYouTubeProcessingState?.lastError
-    ];
-    return candidates
-      .map(x => String(x || '').trim())
-      .find(x =>
-        x &&
-        !/uploaded with sound|ready|working|creating|choosing|finding|downloading|uploading|processing continues/i.test(x)
-      ) || '';
+    ].map(x => String(x || '').trim()).filter(Boolean);
   }
 
-  function syncSimpleSettingsToOne() {
+  function exactFailure() {
+    const all = currentMessages();
+    return all.find(x =>
+      /(error|failed|stopped|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|found \d+\/\d+)/i.test(x)
+    ) || '';
+  }
+
+  function isRetryableSourceFailure(message) {
+    const m = String(message || '').toLowerCase();
+    return (
+      m.includes('still-picture') ||
+      m.includes('repeated-frame') ||
+      m.includes('moving replacement') ||
+      m.includes('bad source') ||
+      m.includes('different unused') ||
+      m.includes('unused public domain') ||
+      m.includes('no suitable sources') ||
+      /found \d+\/\d+ unused/.test(m)
+    );
+  }
+
+  function isHardFailure(message) {
+    const m = String(message || '').toLowerCase();
+    return (
+      m.includes('quota') ||
+      m.includes('daily upload') ||
+      m.includes('upload limit') ||
+      m.includes('unauthorized') ||
+      m.includes('forbidden') ||
+      m.includes('oauth') ||
+      m.includes('sign in') ||
+      m.includes('connect youtube') ||
+      m.includes('permission') ||
+      m.includes('403') ||
+      m.includes('401')
+    );
+  }
+
+  function syncOneShort() {
     const topicKey = $('simpleTopic')?.value || 'wildlife';
     const topic = TOPICS[topicKey] || TOPICS.wildlife;
     const style = $('simpleStyle')?.value || 'documentary';
     const duration = Math.max(10, Math.min(60, Number($('simpleDuration')?.value || 30)));
     const privacy = $('simplePrivacy')?.value || 'private';
+    const rights = Boolean($('simpleRights')?.checked);
 
     window.ClipFreeVarietyMode = topicKey === 'wildlife';
 
@@ -990,16 +1038,15 @@
       sound.dispatchEvent(new Event('change', {bubbles:true}));
     }
 
-    const rights = Boolean($('simpleRights')?.checked);
     const autoRights = $('autoUploadCertification');
     if (autoRights) autoRights.checked = rights;
-    const oldRights = $('clipfree20Rights');
-    if (oldRights) oldRights.checked = rights;
+    const legacyRights = $('clipfree20Rights');
+    if (legacyRights) legacyRights.checked = rights;
 
-    return {topicKey, topic, style, duration, privacy, rights};
+    return {rights, topicKey, privacy, duration};
   }
 
-  async function waitForSingleCycle(button, timeoutMs = 45 * 60 * 1000) {
+  async function waitForCycle(button, timeoutMs = 45 * 60 * 1000) {
     const start = Date.now();
 
     while (!button.disabled && Date.now() - start < 8000) {
@@ -1012,127 +1059,366 @@
 
     while (button.disabled) {
       if (Date.now() - start > timeoutMs) {
-        throw new Error('This Short took unusually long. ClipFree stopped the 20-Short run so completed uploads remain safe.');
+        throw new Error('This Short took unusually long. The batch stopped so completed uploads remain safe.');
       }
       await sleep(650);
     }
   }
 
-  async function runSequential(total) {
-    if (running20) return;
-    running20 = true;
+  async function runBatch(total) {
+    if (running) return;
+    running = true;
 
-    const startButton = $('simpleStart');
-    const generateButton = $('generateAnimalVideo');
-    const requested = Math.max(1, Math.min(20, Number(total || 20)));
+    const requested = Math.max(2, Math.min(20, Number(total || 2)));
+    const visibleButton = $('simpleStart');
+    const generatorButton = $('generateAnimalVideo');
 
     try {
-      const cfg = syncSimpleSettingsToOne();
+      const cfg = syncOneShort();
 
       if (!cfg.rights) {
         throw new Error('Tick the content-rights / Community Guidelines confirmation first.');
       }
 
       if (!window.ClipFreeYouTube?.isConnected?.()) {
-        throw new Error('Connect YouTube first with the separate YouTube Connection + Analytics button.');
+        throw new Error('Connect YouTube first with the YouTube Connection + Analytics button.');
+      }
+
+      if (!generatorButton) {
+        throw new Error('The Short generator is not available. Refresh ClipFree and try again.');
       }
 
       const limit = window.ClipFreeYouTube?.getUploadLimitStatus?.();
       if (limit?.active) {
-        throw new Error(`YouTube's upload-limit cooldown is active until about ${limit.untilText}.`);
+        throw new Error(`YouTube upload cooldown is active until about ${limit.untilText}.`);
       }
 
-      if (!generateButton) {
-        throw new Error('The Short generator is not available. Refresh ClipFree and try again.');
-      }
-
-      if (startButton) startButton.disabled = true;
+      if (visibleButton) visibleButton.disabled = true;
 
       const runStart = transferredCount();
-      let completed = 0;
-
+      let done = 0;
       setProgress(0, requested);
-      setSimpleStatus(
-        `Starting ${requested} Shorts in reliable sequential mode. ClipFree will create and upload ONE at a time and require a real YouTube video ID before continuing.`
-      );
 
-      for (let i = 0; i < requested; i++) {
-        syncSimpleSettingsToOne();
-        const before = transferredCount();
+      while (done < requested) {
+        let slotSucceeded = false;
 
-        setSimpleStatus(
-          `Short ${i + 1}/${requested}: creating a unique moving Short. ${completed}/${requested} have real YouTube video IDs so far…`
-        );
+        for (let attempt = 1; attempt <= MAX_SOURCE_RETRIES && !slotSucceeded; attempt++) {
+          syncOneShort();
+          const before = transferredCount();
 
-        generateButton.click();
-        await waitForSingleCycle(generateButton);
-
-        const after = transferredCount();
-        const gained = Math.max(0, after - before);
-
-        if (gained < 1) {
-          const exact = lastRealError();
-          throw new Error(
-            `Short ${i + 1}/${requested} did not receive a YouTube video ID. ` +
-            (exact || 'The run stopped here so ClipFree does not claim an upload that did not reach YouTube.')
+          setStatus(
+            `Short ${done + 1}/${requested}: finding a moving unused source` +
+            (attempt > 1 ? ` — retry ${attempt}/${MAX_SOURCE_RETRIES}` : '') +
+            `. ${done}/${requested} have real YouTube video IDs so far…`
           );
+
+          generatorButton.click();
+          await waitForCycle(generatorButton);
+
+          const after = transferredCount();
+          if (after > before) {
+            done += 1;
+            slotSucceeded = true;
+            setProgress(done, requested);
+            setStatus(
+              `${done}/${requested} Shorts reached YouTube with real video IDs ❤️ ` +
+              `${confirmedCount()} total upload(s) have finished YouTube processing.` +
+              (done < requested ? ` Preparing Short ${done + 1}/${requested}…` : ''),
+              'good'
+            );
+            if (done < requested) await sleep(900);
+            continue;
+          }
+
+          const failure = exactFailure() || 'No YouTube video ID was returned for this Short.';
+
+          if (isHardFailure(failure)) {
+            throw new Error(`Short ${done + 1}/${requested} stopped: ${failure}`);
+          }
+
+          if (isRetryableSourceFailure(failure) && attempt < MAX_SOURCE_RETRIES) {
+            setStatus(
+              `Short ${done + 1}/${requested}: that source was rejected because it was still/unsuitable. ` +
+              `ClipFree is automatically trying a different source (${attempt + 1}/${MAX_SOURCE_RETRIES})…`,
+              'bad'
+            );
+            await sleep(900);
+            continue;
+          }
+
+          if (isRetryableSourceFailure(failure)) {
+            throw new Error(
+              `Short ${done + 1}/${requested} could not find a verified moving source after ${MAX_SOURCE_RETRIES} different attempts. ` +
+              `Completed uploads are safe. Try the batch again and Source Vault will continue rotating to new sources.`
+            );
+          }
+
+          throw new Error(`Short ${done + 1}/${requested} did not receive a YouTube video ID. ${failure}`);
         }
-
-        completed += 1;
-        setProgress(completed, requested);
-
-        const confirmed = Number(window.ClipFreeYouTubeProcessingState?.confirmed || 0);
-        setSimpleStatus(
-          `${completed}/${requested} Shorts reached YouTube with real video IDs ❤️ ` +
-          `${confirmed} total upload(s) have also finished YouTube processing. ` +
-          (completed < requested ? `Preparing Short ${completed + 1}/${requested}…` : 'Batch complete.'),
-          'good'
-        );
-
-        if (completed < requested) await sleep(900);
       }
 
-      const gainedRun = Math.max(0, transferredCount() - runStart);
-      if (gainedRun < requested) {
+      const gained = transferredCount() - runStart;
+      if (gained < requested) {
         throw new Error(
-          `ClipFree verified ${gainedRun}/${requested} real YouTube video IDs for this run. ` +
+          `ClipFree verified ${gained}/${requested} real YouTube video IDs for this run. ` +
           `It will not mark the batch complete unless all ${requested} are verified.`
         );
       }
 
       setProgress(requested, requested);
-      setSimpleStatus(
-        `All ${requested}/${requested} Shorts reached YouTube and received real video IDs ❤️ YouTube may still be processing some in the background.`,
+      setStatus(
+        `All ${requested}/${requested} Shorts reached YouTube and received real video IDs ❤️ ` +
+        `YouTube may still be processing some videos in the background.`,
         'good'
       );
     } catch (err) {
-      console.error('ClipFree sequential 20 mode stopped', err);
-      setSimpleStatus(err?.message || String(err), 'bad');
+      console.error('ClipFree v15 batch stopped', err);
+      setStatus(err?.message || String(err), 'bad');
     } finally {
       if ($('simpleCount')) $('simpleCount').value = String(requested);
-      if (startButton) {
-        startButton.disabled = false;
-        startButton.textContent = `✨ CREATE + SEO + UPLOAD ${requested} SHORT${requested === 1 ? '' : 'S'}`;
+      if (visibleButton) {
+        visibleButton.disabled = false;
+        visibleButton.textContent = `✨ CREATE + SEO + UPLOAD ${requested} SHORTS`;
       }
-      running20 = false;
+      running = false;
     }
   }
 
+  // Capture every multi-Short request BEFORE old 8+8+4/native batch handlers.
   document.addEventListener('click', event => {
     const target = event.target?.closest?.('#simpleStart');
     if (!target) return;
 
     const requested = Math.max(1, Math.min(20, Number($('simpleCount')?.value || 1)));
-    if (requested <= 8) return;
+    if (requested <= 1) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    runSequential(requested);
+    runBatch(requested);
   }, true);
 
-  window.ClipFreeSequential20 = {
-    version:'14.0',
-    run: () => runSequential(20),
-    active: () => running20
+  window.ClipFreeSequentialBatch = {
+    version:'15.0',
+    max:20,
+    run: runBatch,
+    active: () => running
   };
+})();
+
+/* CLIPFREE REAL-MOVING-SOURCE FILTER v16 */
+/*
+  Wildlife source preflight:
+  - only accepts actual video files
+  - downloads candidate video sources BEFORE generation
+  - samples several frames from the source itself
+  - rejects video files that are effectively just one still picture
+  - returns only sources with verified visual movement to the generator
+*/
+(() => {
+  'use strict';
+
+  const PATCH_FLAG = '__clipfreeRealMovingSourcesV16';
+  const MAX_CHECKS_PER_SEARCH = 10;
+  const MAX_SOURCE_BYTES = 35 * 1024 * 1024;
+  const verified = new Map();
+
+  function waitFor(video, eventName, timeoutMs = 6500) {
+    return new Promise((resolve, reject) => {
+      let timer = null;
+      const done = () => { cleanup(); resolve(); };
+      const fail = () => { cleanup(); reject(new Error('video decode failed')); };
+      const cleanup = () => {
+        video.removeEventListener(eventName, done);
+        video.removeEventListener('error', fail);
+        if (timer) clearTimeout(timer);
+      };
+      video.addEventListener(eventName, done, {once:true});
+      video.addEventListener('error', fail, {once:true});
+      timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`${eventName} timed out`));
+      }, timeoutMs);
+    });
+  }
+
+  async function seek(video, time) {
+    const duration = Number(video.duration || 0);
+    const safe = Math.max(0.06, Math.min(Math.max(0.06, duration - 0.12), time));
+    if (Math.abs(Number(video.currentTime || 0) - safe) < 0.03) return;
+    video.currentTime = safe;
+    try { await waitFor(video, 'seeked', 4500); } catch {}
+  }
+
+  function frame(video, canvas, ctx) {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const p = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const out = new Float32Array(canvas.width * canvas.height);
+    let j = 0;
+    for (let i = 0; i < p.length; i += 4) {
+      out[j++] = p[i] * 0.299 + p[i + 1] * 0.587 + p[i + 2] * 0.114;
+    }
+    return out;
+  }
+
+  function difference(a, b) {
+    if (!a || !b || a.length !== b.length) return 0;
+    let total = 0;
+    for (let i = 0; i < a.length; i++) total += Math.abs(a[i] - b[i]);
+    return total / a.length;
+  }
+
+  async function verifyMovingBlob(blob) {
+    if (!(blob instanceof Blob) || blob.size < 96 * 1024) {
+      return {moving:false, reason:'source is empty or too small'};
+    }
+
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = 48;
+    canvas.height = 27;
+    const ctx = canvas.getContext('2d', {willReadFrequently:true});
+
+    try {
+      video.preload = 'auto';
+      video.muted = true;
+      video.playsInline = true;
+      video.src = url;
+      await waitFor(video, 'loadedmetadata', 7500);
+
+      const duration = Number(video.duration || 0);
+      if (!Number.isFinite(duration) || duration < 1.5 || !video.videoWidth || !video.videoHeight) {
+        return {moving:false, reason:'invalid video metadata'};
+      }
+
+      const times = [0.16, 0.40, 0.66, 0.86].map(f => Math.max(0.10, duration * f));
+      const frames = [];
+      for (const t of times) {
+        await seek(video, t);
+        frames.push(frame(video, canvas, ctx));
+      }
+
+      const diffs = [];
+      for (let i = 1; i < frames.length; i++) diffs.push(difference(frames[i - 1], frames[i]));
+      const best = Math.max(...diffs, 0);
+      const avg = diffs.length ? diffs.reduce((a,b) => a+b, 0) / diffs.length : 0;
+
+      // Very low values mean the same picture was repeated through the file.
+      const moving = best >= 0.35 || avg >= 0.18;
+      return {
+        moving,
+        score:Number(best.toFixed(3)),
+        average:Number(avg.toFixed(3)),
+        duration
+      };
+    } catch (err) {
+      return {moving:false, reason:err?.message || String(err)};
+    } finally {
+      video.removeAttribute('src');
+      try { video.load(); } catch {}
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async function verifySource(item) {
+    const key = String(item?.fileUrl || '').trim();
+    if (!key) return false;
+    if (verified.has(key)) return verified.get(key);
+
+    const mime = String(item?.mime || '').toLowerCase();
+    if (mime && !mime.startsWith('video/')) {
+      verified.set(key, false);
+      return false;
+    }
+
+    const declaredSize = Number(item?.size || 0);
+    if (declaredSize && declaredSize > MAX_SOURCE_BYTES) {
+      verified.set(key, false);
+      return false;
+    }
+
+    try {
+      const response = await fetch(key, {mode:'cors', cache:'no-store'});
+      if (!response.ok) throw new Error(`source fetch failed (${response.status})`);
+
+      const blob = await response.blob();
+      if (blob.size > MAX_SOURCE_BYTES) {
+        verified.set(key, false);
+        return false;
+      }
+
+      const result = await verifyMovingBlob(blob);
+      const ok = Boolean(result.moving);
+      verified.set(key, ok);
+
+      if (ok) {
+        item.__clipfreeMovingVideoVerified = true;
+        item.__clipfreeMotionScore = result.score;
+        item.__clipfreeMotionAverage = result.average;
+      }
+      return ok;
+    } catch (err) {
+      console.warn('Moving-source preflight rejected source', item?.title || key, err);
+      verified.set(key, false);
+      return false;
+    }
+  }
+
+  function isWildlifeQuery(query = '') {
+    return /\b(wildlife|animal|lion|tiger|leopard|cheetah|jaguar|wolf|coyote|fox|bear|elephant|giraffe|zebra|rhino|hippo|bison|moose|elk|deer|antelope|kangaroo|koala|otter|rabbit|squirrel|gorilla|chimpanzee|orangutan|monkey|hyena|meerkat|crocodile|alligator|turtle|snake|eagle|hawk|falcon|owl|penguin|shark|whale|dolphin|seal|frog|kitten|puppy|cat|dog)\b/i.test(String(query || ''));
+  }
+
+  function patch() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt?.searchCommonsDownloadable) return false;
+    if (yt[PATCH_FLAG]) return true;
+
+    const original = yt.searchCommonsDownloadable.bind(yt);
+
+    yt.searchCommonsDownloadable = async function movingVideosOnly(query, limit = 12) {
+      const results = await original(query, Math.max(limit, MAX_CHECKS_PER_SEARCH));
+
+      // Keep non-wildlife discovery unchanged.
+      if (!isWildlifeQuery(query) && !window.ClipFreeVarietyMode) {
+        return results;
+      }
+
+      const moving = [];
+      let checked = 0;
+
+      for (const item of results || []) {
+        if (checked >= MAX_CHECKS_PER_SEARCH) break;
+        checked += 1;
+
+        const ok = await verifySource(item);
+        if (!ok) continue;
+
+        moving.push(item);
+        if (moving.length >= limit) break;
+      }
+
+      if (!moving.length) {
+        console.warn('ClipFree v16 found no verified moving video sources for', query);
+      }
+
+      return moving;
+    };
+
+    yt[PATCH_FLAG] = true;
+    window.CLIPFREE_REAL_MOVING_SOURCES = {
+      version:'16.0',
+      enabled:true,
+      rule:'wildlife source must contain verified moving frames before generation'
+    };
+    return true;
+  }
+
+  if (!patch()) {
+    const timer = setInterval(() => {
+      if (patch()) clearInterval(timer);
+    }, 200);
+    setTimeout(() => clearInterval(timer), 30000);
+  }
+
+  window.addEventListener('clipfree-youtube-ready', () => setTimeout(patch, 0));
 })();

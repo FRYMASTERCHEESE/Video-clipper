@@ -1,0 +1,31 @@
+ClipFree Real Moving Videos v16 — MOBILE ONLY
+
+This update is specifically for the problem where a Wikimedia 'video' file is really
+a still photograph repeated for several seconds.
+
+v16 now:
+- requires an actual VIDEO MIME type
+- downloads candidate wildlife source videos before creation
+- samples multiple frames from the ORIGINAL source
+- rejects sources whose frames are effectively identical
+- only sends verified MOVING sources into the Short generator
+- keeps Motion Guard as a second safety check before YouTube upload
+- keeps the reliable 2–20 one-at-a-time upload runner with automatic retries
+
+Replace ONE file:
+  compliance-demo-v11.js
+
+Repository:
+  FRYMASTERCHEESE/Video-clipper
+
+Then:
+1. Commit to main.
+2. Wait 1–2 minutes.
+3. Fully close old coreyvibe.org tabs.
+4. Reopen the site.
+5. Connect YouTube.
+6. Choose 8 or 20 Shorts, tick rights, and start.
+7. Keep the tab open.
+
+Because v16 verifies source movement before rendering, source search can take longer,
+but it is designed to avoid picture-only Shorts.
