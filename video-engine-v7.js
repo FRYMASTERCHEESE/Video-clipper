@@ -34,6 +34,15 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
       };
     }
 
+    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+    if (mobile) {
+      return {
+        width:720, height:1280, fps:30, crf:26, preset:'ultrafast',
+        maxrate:'1500k', bufsize:'3000k', audioBitrate:'96k',
+        label:'720p Mobile Fast Upload'
+      };
+    }
+
     const high = memory >= 8 && cores >= 8;
     return high
       ? {
@@ -42,9 +51,9 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
           label:'1080p HQ Upload Turbo'
         }
       : {
-          width:720, height:1280, fps:30, crf:22, preset:'superfast',
-          maxrate:'2200k', bufsize:'4400k', audioBitrate:'128k',
-          label:'720p HQ Upload Turbo'
+          width:720, height:1280, fps:30, crf:24, preset:'ultrafast',
+          maxrate:'1800k', bufsize:'3600k', audioBitrate:'96k',
+          label:'720p Fast Upload'
         };
   }
 
@@ -261,7 +270,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     a.__clipfreeSpeedQualityV7 = true;
     window.CLIPFREE_VIDEO_ENGINE_V7 = {
       enabled:true,
-      version:'7.1-upload-turbo',
+      version:'7.2-mobile-turbo-v18',
       profile:deviceProfile(),
       singlePass:true
     };

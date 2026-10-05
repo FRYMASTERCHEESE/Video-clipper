@@ -913,7 +913,7 @@
 
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  const MAX_SOURCE_RETRIES = 6;
+  const MAX_SOURCE_RETRIES = 3;
 
   const TOPICS = {
     wildlife:  {preset:'wildlife', query:'clipfree variety wildlife'},
@@ -1705,6 +1705,193 @@
     const timer = setInterval(() => {
       if (patch()) clearInterval(timer);
     }, 150);
+    setTimeout(() => clearInterval(timer), 30000);
+  }
+
+  window.addEventListener('clipfree-youtube-ready', () => setTimeout(patch, 0));
+})();
+
+/* CLIPFREE TURBO SOURCE PIPELINE v18 */
+/*
+  Faster real-video source pipeline for mobile.
+
+  Main change:
+  v17 spent time remotely seeking through candidate videos before ClipFree could
+  even download/render Short #1. v18 removes that expensive preflight stage.
+
+  v18 instead:
+  - searches ONLY actual video files from Wikimedia Commons
+  - prefers smaller files first for fast phone downloads
+  - keeps Public Domain / CC0 / simple CC-BY filtering
+  - rejects non-video MIME types immediately
+  - lets the existing local Motion Guard inspect the finished MP4 before upload
+  - keeps automatic source retry if a rare video is actually a repeated still
+
+  This means "finding a moving unused source" should resolve much faster while
+  picture-only Shorts still cannot be uploaded.
+*/
+(() => {
+  'use strict';
+
+  const FLAG = '__clipfreeTurboSourceV18';
+  const FAST_LIMIT_BYTES = 12 * 1024 * 1024;
+  const FALLBACK_LIMIT_BYTES = 20 * 1024 * 1024;
+
+  function stripHtml(value = '') {
+    const box = document.createElement('div');
+    box.innerHTML = String(value || '');
+    return (box.textContent || box.innerText || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function metaValue(meta, key) {
+    return stripHtml(meta?.[key]?.value || '');
+  }
+
+  function sourcePage(title) {
+    return `https://commons.wikimedia.org/wiki/${encodeURIComponent(String(title || '').replace(/ /g, '_')).replace(/%2F/g, '/')}`;
+  }
+
+  function reuseAllowed(license = '') {
+    const l = String(license || '').toLowerCase();
+    return (
+      l.includes('public domain') ||
+      l.includes('cc0') ||
+      (
+        (l.includes('cc by') || l.includes('creative commons attribution')) &&
+        !l.includes('by-sa') &&
+        !l.includes('share alike')
+      )
+    );
+  }
+
+  function makeItem(page) {
+    const info = page?.imageinfo?.[0] || {};
+    const meta = info.extmetadata || {};
+    const title = String(page?.title || 'Wikimedia Commons video').replace(/^File:/i, '');
+    const creator =
+      metaValue(meta, 'Artist') ||
+      metaValue(meta, 'Credit') ||
+      'Wikimedia Commons contributor';
+    const license =
+      metaValue(meta, 'LicenseShortName') ||
+      metaValue(meta, 'UsageTerms') ||
+      'See source page for licence';
+    const licenseUrl = metaValue(meta, 'LicenseUrl');
+    const pageUrl = sourcePage(page?.title || '');
+
+    return {
+      title,
+      creator,
+      license,
+      licenseUrl,
+      sourceUrl: pageUrl,
+      fileUrl: info.url || '',
+      thumbUrl: info.thumburl || '',
+      mime: info.mime || '',
+      size: Number(info.size || 0),
+      provider: 'Wikimedia Commons',
+      attribution:
+        `“${title}” — ${creator}. Source: Wikimedia Commons. ` +
+        `Licence: ${license}${licenseUrl ? ` (${licenseUrl})` : ''}. ${pageUrl}`,
+      __clipfreeActualVideoMime: String(info.mime || '').startsWith('video/')
+    };
+  }
+
+  async function queryCommons(query, maxBytes, limit) {
+    const kb = Math.max(1024, Math.round(maxBytes / 1024));
+    const url = new URL('https://commons.wikimedia.org/w/api.php');
+
+    const params = {
+      action:'query',
+      generator:'search',
+      gsrsearch:`${query} filetype:video filesize:<${kb}`,
+      gsrnamespace:'6',
+      gsrlimit:String(Math.max(8, Math.min(24, Number(limit || 12) * 2))),
+      prop:'imageinfo',
+      iiprop:'url|size|mime|mediatype|extmetadata',
+      iiurlwidth:'480',
+      format:'json',
+      formatversion:'2',
+      origin:'*'
+    };
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const response = await fetch(url.toString(), {
+        mode:'cors',
+        cache:'no-store',
+        signal:controller.signal
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.error) {
+        throw new Error(data?.error?.info || `Wikimedia video search failed (${response.status})`);
+      }
+
+      return (data?.query?.pages || [])
+        .map(makeItem)
+        .filter(item =>
+          item.fileUrl &&
+          item.__clipfreeActualVideoMime &&
+          (!item.size || item.size <= maxBytes) &&
+          reuseAllowed(item.license)
+        )
+        .sort((a,b) => Number(a.size || 999999999) - Number(b.size || 999999999));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function turboSearch(query, limit = 12) {
+    const wanted = Math.max(1, Math.min(20, Number(limit || 12)));
+
+    // Fast first pass: small true-video files.
+    let items = [];
+    try {
+      items = await queryCommons(query, FAST_LIMIT_BYTES, wanted);
+    } catch (err) {
+      console.warn('Fast Commons pass skipped', err);
+    }
+
+    // One broader fallback only if needed — no six remote-motion retry loops.
+    if (!items.length) {
+      try {
+        items = await queryCommons(query, FALLBACK_LIMIT_BYTES, wanted);
+      } catch (err) {
+        console.warn('Fallback Commons pass skipped', err);
+      }
+    }
+
+    return items.slice(0, wanted);
+  }
+
+  function patch() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt) return false;
+    if (yt[FLAG]) return true;
+
+    yt.searchCommonsDownloadable = turboSearch;
+    yt[FLAG] = true;
+
+    // Keep the batch system's source retries short. Motion Guard is now the
+    // authoritative movement check AFTER a real video has been rendered.
+    window.CLIPFREE_TURBO_SOURCE_PIPELINE = {
+      version:'18.0',
+      enabled:true,
+      fastMaxMB:12,
+      fallbackMaxMB:20,
+      rule:'actual video MIME + small-source preference + final local motion guard'
+    };
+
+    return true;
+  }
+
+  if (!patch()) {
+    const timer = setInterval(() => {
+      if (patch()) clearInterval(timer);
+    }, 120);
     setTimeout(() => clearInterval(timer), 30000);
   }
 

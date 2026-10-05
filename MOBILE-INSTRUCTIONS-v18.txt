@@ -1,0 +1,39 @@
+ClipFree Turbo v18 — MOBILE ONLY
+
+This update fixes the long "finding a moving unused source" wait and also makes
+mobile encoding + YouTube transfer smaller/faster.
+
+UPLOAD/REPLACE TWO FILES IN FRYMASTERCHEESE/Video-clipper:
+1. compliance-demo-v11.js
+2. video-engine-v7.js
+
+What v18 changes:
+
+SOURCE FINDING
+- Removes the expensive v17 remote-seeking checks that could stall for many minutes.
+- Searches actual VIDEO MIME files only.
+- Prefers <=12 MB source videos first.
+- Uses one <=20 MB fallback search only if needed.
+- Keeps licence filtering.
+- Final Motion Guard still blocks repeated-still/picture-only Shorts before upload.
+- Source retry count reduced from 6 to 3 to avoid long retry loops.
+
+MOBILE VIDEO ENCODING
+- Phones use 720x1280 vertical HD.
+- x264 ultrafast preset.
+- ~1.5 Mbps max video bitrate.
+- 96 kbps AAC narration.
+- Smaller MP4 = less encoding work + less data to upload.
+
+IMPORTANT
+- This does not make your phone's internet connection physically faster.
+- It removes avoidable ClipFree waiting and makes the upload file smaller.
+- Keep the browser tab open during a multi-Short run.
+
+After uploading both files:
+1. Commit to main.
+2. Wait 1–2 minutes.
+3. Fully close old coreyvibe.org tabs.
+4. Reopen ClipFree.
+5. Connect YouTube.
+6. Try 8 Shorts again.
