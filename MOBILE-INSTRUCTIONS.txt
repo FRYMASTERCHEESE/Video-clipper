@@ -1,18 +1,32 @@
-ClipFree Mobile Upload Turbo v12
+ClipFree Mobile Connect + Analytics v12
+=======================================
 
-NO POWERSHELL REQUIRED.
+NO POWERSHELL. MOBILE ONLY.
+
+Replace ONE file in your GitHub repository:
+  compliance-demo-v11.js
+
+Repository:
+  FRYMASTERCHEESE/Video-clipper
 
 On your phone:
-1. Open your FRYMASTERCHEESE/Video-clipper repository on GitHub.
-2. Upload/replace video-engine-v7.js with the supplied file of the same name.
+1. Open the Video-clipper repository on GitHub.
+2. Upload/replace compliance-demo-v11.js with the file in this ZIP.
 3. Commit the change to main.
-4. Open https://coreyvibe.org/?audit=1 in a fresh tab and refresh once.
+4. Wait a minute for GitHub Pages, then fully close old coreyvibe.org tabs.
+5. Reopen:
+   https://coreyvibe.org/?audit=1
 
-What changed:
-- Audit mode stays 720x1280 vertical HD.
-- Audit video target reduced to ~1.6 Mbps video + 96 kbps audio.
-- Normal 720p and 1080p modes also use smaller upload-friendly caps.
-- Single-pass encoding and the existing no-second-encode path are preserved.
-- This reduces the MP4 size, which should make encoding + YouTube transfer faster.
+What you should see:
+- A separate "YouTube Connection + Analytics" card.
+- Button: "Connect YouTube + Load Analytics" or "Refresh YouTube + Analytics".
+- Views, estimated watch hours, average view duration and net subscribers.
+- Pressing that button DOES NOT download footage, generate a Short or upload anything.
 
-This does not bypass YouTube processing or API rules.
+For the YouTube reviewer recording:
+1. Tap Connect/Refresh YouTube + Analytics.
+2. Hold the analytics numbers on screen for 5–10 seconds.
+3. Then use the audit setup button for 1 Private 10-second Short.
+4. Show source/rights, generated metadata, real YouTube video ID, then YouTube Studio.
+
+This keeps the existing v11 compliance panel and adds the separate mobile analytics control.

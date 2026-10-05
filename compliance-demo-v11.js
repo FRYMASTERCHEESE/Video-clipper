@@ -147,9 +147,6 @@
       el.dispatchEvent(new Event('input', {bubbles:true}));
     };
 
-    // Audit runs use an exact species instead of the broad variety search.
-    // This makes the recording deterministic and prevents unrelated "wildlife"
-    // search results from ever being submitted as the demo Short.
     set('simpleTopic', 'lions');
     set('simpleCount', 1);
     set('simpleDuration', 10);
@@ -157,7 +154,7 @@
     window.CLIPFREE_COMPLIANCE_EXACT_ANIMAL = 'lion';
 
     const rights = $('simpleRights');
-    if (rights) rights.checked = false; // Reviewer can see the user tick it manually.
+    if (rights) rights.checked = false;
 
     $('simpleRights')?.scrollIntoView({behavior:'smooth',block:'center'});
     render();
@@ -301,4 +298,212 @@
     },
     refresh: render
   };
+})();
+/* ==========================================================================
+   ClipFree AI — Mobile YouTube Connect + Analytics v12
+   Adds a separate, non-uploading YouTube connection/analytics control to the
+   one-screen mobile studio. Pressing this button NEVER creates/downloads media.
+   ========================================================================== */
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  let busy = false;
+
+  function metric(id, fallback = '—') {
+    const value = $(id)?.textContent?.trim();
+    return value || fallback;
+  }
+
+  function isConnected() {
+    try { return Boolean(window.ClipFreeYouTube?.isConnected?.()); }
+    catch { return false; }
+  }
+
+  function channelTitle() {
+    try { return window.ClipFreeYouTube?.getChannelTitle?.() || 'YouTube'; }
+    catch { return 'YouTube'; }
+  }
+
+  function renderMobileAnalytics(message = '') {
+    const card = $('mobileYoutubeAnalyticsCard');
+    if (!card) return;
+
+    const connected = isConnected();
+    const button = $('mobileYoutubeAnalyticsButton');
+    const state = $('mobileYoutubeAnalyticsState');
+
+    if (button && !busy) {
+      button.textContent = connected
+        ? '↻ Refresh YouTube + Analytics'
+        : '▶ Connect YouTube + Load Analytics';
+    }
+
+    const views = metric('metricViews');
+    const watch = metric('metricWatchHours');
+    const avg = metric('metricAvgDuration');
+    const subs = metric('metricNetSubs');
+
+    const map = {
+      mobileMetricViews: views,
+      mobileMetricWatch: watch,
+      mobileMetricAvg: avg,
+      mobileMetricSubs: subs
+    };
+    for (const [id, value] of Object.entries(map)) {
+      const el = $(id);
+      if (el) el.textContent = value;
+    }
+
+    if (state) {
+      if (message) {
+        state.textContent = message;
+        state.className = 'mobile-analytics-state';
+      } else if (connected) {
+        state.textContent = `✅ Connected to ${channelTitle()}. Analytics shown below are read from the authorized YouTube Analytics API.`;
+        state.className = 'mobile-analytics-state good';
+      } else {
+        state.textContent = 'YouTube is not connected yet. Tap the button above. This does not create or upload a Short.';
+        state.className = 'mobile-analytics-state';
+      }
+    }
+
+    const simpleConnection = $('simpleConnection');
+    if (simpleConnection) {
+      if (connected) {
+        simpleConnection.style.color = '#8ce3aa';
+        simpleConnection.innerHTML = `<span class="simple-dot"></span><span>${channelTitle()} connected ✓</span>`;
+      } else {
+        simpleConnection.style.color = '#ffbc76';
+        simpleConnection.innerHTML = '<span class="simple-dot"></span><span>YouTube not connected — use the separate Connect + Analytics button below.</span>';
+      }
+    }
+  }
+
+  async function connectAndRefreshOnly() {
+    if (busy) return;
+    const button = $('mobileYoutubeAnalyticsButton');
+    busy = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = isConnected() ? 'Refreshing analytics…' : 'Connecting YouTube…';
+    }
+
+    try {
+      const yt = window.ClipFreeYouTube;
+      if (!yt) throw new Error('YouTube tools are still loading. Wait a few seconds and try again.');
+
+      if (!yt.isConnected?.()) {
+        renderMobileAnalytics('Opening Google sign-in. After approval, ClipFree will load analytics only — it will not start a Short.');
+        await yt.connectYoutube?.();
+      }
+
+      if (!yt.isConnected?.()) {
+        throw new Error('Google sign-in did not finish. Approve YouTube access, then tap this button again.');
+      }
+
+      renderMobileAnalytics(`Connected to ${channelTitle()}. Loading real YouTube analytics…`);
+      await yt.refreshAllChannelData?.();
+
+      // Allow the hidden dashboard metric nodes to finish painting.
+      await sleep(120);
+      renderMobileAnalytics();
+    } catch (err) {
+      const state = $('mobileYoutubeAnalyticsState');
+      if (state) {
+        state.textContent = `⚠️ ${err?.message || err}`;
+        state.className = 'mobile-analytics-state bad';
+      }
+    } finally {
+      busy = false;
+      if (button) button.disabled = false;
+      renderMobileAnalytics();
+    }
+  }
+
+  function buildMobileAnalyticsCard() {
+    if ($('mobileYoutubeAnalyticsCard')) {
+      renderMobileAnalytics();
+      return true;
+    }
+
+    const studio = $('clipfreeSimpleStudio');
+    if (!studio) return false;
+
+    const head = studio.querySelector('.simple-head');
+    if (!head) return false;
+
+    if (!$('mobileYoutubeAnalyticsCss')) {
+      const style = document.createElement('style');
+      style.id = 'mobileYoutubeAnalyticsCss';
+      style.textContent = `
+        #mobileYoutubeAnalyticsCard{
+          margin-top:14px;padding:14px;border:1px solid #4f3ea7;border-radius:14px;
+          background:linear-gradient(145deg,#151324,#0f0e18);color:#fff
+        }
+        #mobileYoutubeAnalyticsCard h3{margin:0 0 5px;font-size:1rem}
+        #mobileYoutubeAnalyticsCard p{margin:0 0 10px;color:#bbb5d4;font-size:.82rem;line-height:1.45}
+        #mobileYoutubeAnalyticsButton{
+          width:100%;min-height:50px;border:0;border-radius:12px;
+          background:linear-gradient(135deg,#7d5cff,#5a39dd);color:#fff;
+          font:inherit;font-weight:900;font-size:.95rem;padding:11px 13px
+        }
+        #mobileYoutubeAnalyticsButton:disabled{opacity:.65}
+        .mobile-analytics-state{margin-top:9px;color:#ffd293;font-size:.78rem;line-height:1.4}
+        .mobile-analytics-state.good{color:#9ae6b4}
+        .mobile-analytics-state.bad{color:#ff9d9d}
+        .mobile-analytics-grid{
+          display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:11px
+        }
+        .mobile-analytics-grid div{
+          padding:10px;border-radius:10px;background:#0d0c13;border:1px solid #29243d
+        }
+        .mobile-analytics-grid small{display:block;color:#9991b8;font-size:.67rem;margin-bottom:3px}
+        .mobile-analytics-grid strong{font-size:1rem;color:#fff}
+      `;
+      document.head.appendChild(style);
+    }
+
+    const card = document.createElement('div');
+    card.id = 'mobileYoutubeAnalyticsCard';
+    card.innerHTML = `
+      <h3>📊 YouTube Connection + Analytics</h3>
+      <p>Use this first for your YouTube API review. It only connects/refreshes your channel and analytics. It does <strong>not</strong> find media, download footage, create a Short or upload anything.</p>
+      <button id="mobileYoutubeAnalyticsButton" type="button">▶ Connect YouTube + Load Analytics</button>
+      <div id="mobileYoutubeAnalyticsState" class="mobile-analytics-state">Ready to connect.</div>
+      <div class="mobile-analytics-grid">
+        <div><small>Views · last 28 days</small><strong id="mobileMetricViews">—</strong></div>
+        <div><small>Estimated watch hours</small><strong id="mobileMetricWatch">—</strong></div>
+        <div><small>Average view duration</small><strong id="mobileMetricAvg">—</strong></div>
+        <div><small>Net subscribers</small><strong id="mobileMetricSubs">—</strong></div>
+      </div>
+    `;
+
+    head.appendChild(card);
+    $('mobileYoutubeAnalyticsButton')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      connectAndRefreshOnly();
+    });
+
+    renderMobileAnalytics();
+    return true;
+  }
+
+  const timer = setInterval(() => {
+    if (buildMobileAnalyticsCard()) clearInterval(timer);
+  }, 200);
+  setTimeout(() => clearInterval(timer), 30000);
+
+  window.addEventListener('clipfree-youtube-state', () => {
+    setTimeout(() => {
+      buildMobileAnalyticsCard();
+      renderMobileAnalytics();
+    }, 100);
+  });
+
+  setInterval(() => {
+    if ($('mobileYoutubeAnalyticsCard')) renderMobileAnalytics();
+  }, 1800);
 })();
