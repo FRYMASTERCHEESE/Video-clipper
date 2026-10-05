@@ -1,0 +1,18 @@
+ClipFree Mobile Upload Turbo v12
+
+NO POWERSHELL REQUIRED.
+
+On your phone:
+1. Open your FRYMASTERCHEESE/Video-clipper repository on GitHub.
+2. Upload/replace video-engine-v7.js with the supplied file of the same name.
+3. Commit the change to main.
+4. Open https://coreyvibe.org/?audit=1 in a fresh tab and refresh once.
+
+What changed:
+- Audit mode stays 720x1280 vertical HD.
+- Audit video target reduced to ~1.6 Mbps video + 96 kbps audio.
+- Normal 720p and 1080p modes also use smaller upload-friendly caps.
+- Single-pass encoding and the existing no-second-encode path are preserved.
+- This reduces the MP4 size, which should make encoding + YouTube transfer faster.
+
+This does not bypass YouTube processing or API rules.

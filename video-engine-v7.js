@@ -24,20 +24,28 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     const memory = Number(navigator.deviceMemory || 4);
     const cores = Number(navigator.hardwareConcurrency || 4);
 
-    // Compliance recording prioritizes a small, fast-uploading MP4 while keeping
-    // true vertical HD. Normal creator mode keeps the stronger adaptive profile.
+    // Mobile upload turbo: keep audit Shorts at true vertical HD while making
+    // the MP4 smaller so encoding + transfer to YouTube finishes faster.
     if (window.CLIPFREE_COMPLIANCE_RECORDING_MODE) {
       return {
-        width:720, height:1280, fps:30, crf:24, preset:'superfast',
-        maxrate:'2200k', bufsize:'4400k', audioBitrate:'128k',
-        label:'720p Audit Turbo'
+        width:720, height:1280, fps:30, crf:25, preset:'superfast',
+        maxrate:'1600k', bufsize:'3200k', audioBitrate:'96k',
+        label:'720p Audit Upload Turbo'
       };
     }
 
     const high = memory >= 8 && cores >= 8;
     return high
-      ? { width:1080, height:1920, fps:30, crf:21, preset:'superfast', audioBitrate:'192k', label:'1080p HQ' }
-      : { width:720, height:1280, fps:30, crf:20, preset:'superfast', audioBitrate:'192k', label:'720p HQ Turbo' };
+      ? {
+          width:1080, height:1920, fps:30, crf:22, preset:'superfast',
+          maxrate:'3500k', bufsize:'7000k', audioBitrate:'128k',
+          label:'1080p HQ Upload Turbo'
+        }
+      : {
+          width:720, height:1280, fps:30, crf:22, preset:'superfast',
+          maxrate:'2200k', bufsize:'4400k', audioBitrate:'128k',
+          label:'720p HQ Upload Turbo'
+        };
   }
 
   async function ensureFastFFmpeg() {
@@ -157,10 +165,9 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
       '-colorspace', 'bt709',
 
       '-c:a', 'aac',
-      '-b:a', profile.audioBitrate || '192k',
+      '-b:a', profile.audioBitrate || '128k',
       '-ar', '48000',
       '-ac', '2',
-      // Never loop spoken narration. If it finishes early, pad with silence.
       '-af', `volume=0.98,apad=pad_dur=${seconds.toFixed(2)}`,
 
       '-movflags', '+faststart',
@@ -169,9 +176,6 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     ]);
 
     const data = await ff.readFile(outputName);
-
-    // IMPORTANT: use the exact Uint8Array, not data.buffer. This avoids writing
-    // bytes outside the FFmpeg file view into the MP4.
     const blob = new Blob([data], {type:'video/mp4'});
     if (blob.size < 64 * 1024) throw new Error('The optimized video encoder returned an unexpectedly small MP4.');
 
@@ -228,13 +232,10 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     a.createMontageFromFiles = async function(files, options = {}) {
       const usable = Array.from(files || []).filter(Boolean);
 
-      // The wildlife generator intentionally uses one unique source per Short.
-      // Single source + narration can be encoded in ONE pass.
       if (usable.length === 1 && options.audioFile) {
         return encodeSingleSource(usable[0], options.audioFile, options);
       }
 
-      // Other workflows retain the proven existing montage path.
       return originalMontage(files, options);
     };
 
@@ -247,8 +248,6 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
 
       if (!prepared) return originalLoad(file, meta, automatic);
 
-      // Load the final MP4 only for preview/cover creation; do NOT encode it a
-      // second time. This saves time and prevents a second generation-quality hit.
       status('Final MP4 ready — skipping the unnecessary second video encode…');
       await originalLoad(file, meta, false);
       await waitPreview(file);
@@ -262,7 +261,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     a.__clipfreeSpeedQualityV7 = true;
     window.CLIPFREE_VIDEO_ENGINE_V7 = {
       enabled:true,
-      version:'7.0',
+      version:'7.1-upload-turbo',
       profile:deviceProfile(),
       singlePass:true
     };
