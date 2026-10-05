@@ -1,0 +1,32 @@
+ClipFree Motion Guard v13 — MOBILE ONLY
+
+Problem fixed:
+A source can technically be a video file but contain repeated still frames, so the
+finished YouTube Short looks like a photograph.
+
+Replace ONE file in GitHub:
+  compliance-demo-v11.js
+
+Repository:
+  FRYMASTERCHEESE/Video-clipper
+
+What v13 does:
+- Samples multiple frames from every finished animal Short before upload.
+- Blocks a Short if the frames are effectively identical.
+- Permanently skips the bad source on this device.
+- Automatically searches for another matching reusable wildlife video.
+- Reuses the narration/audio already generated.
+- Rebuilds the 9:16 Short with the moving replacement.
+- Checks motion again before YouTube upload.
+- If no verified moving source can be found, it STOPS instead of uploading a picture.
+
+Mobile steps:
+1. Download compliance-demo-v11.js from this ZIP.
+2. On GitHub mobile, replace compliance-demo-v11.js in FRYMASTERCHEESE/Video-clipper.
+3. Commit to main.
+4. Wait about 1–2 minutes for the site update.
+5. Fully close old coreyvibe.org browser tabs and reopen the site.
+6. Create ONE Private test Short first.
+7. Watch it before doing a 20-Short batch.
+
+This file also keeps the previous mobile YouTube + Analytics improvements.
