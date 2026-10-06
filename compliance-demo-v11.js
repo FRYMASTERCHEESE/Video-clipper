@@ -4645,7 +4645,7 @@
   'use strict';
 
   const $ = id => document.getElementById(id);
-  const SEARCH_TIMEOUT_MS = 7000;
+  const SEARCH_TIMEOUT_MS = 18000;
   const VOICE_TIMEOUT_MS = 75000;
   const SEARCH_FLAG = '__clipfreeBoundedSearchV27';
   const VOICE_FLAG = '__clipfreeBoundedVoiceV27';
@@ -4978,5 +4978,135 @@
     noIdGraceMs:12000,
     oldCheckpointMigration:true,
     reviewerFlowChanged:false
+  };
+})();
+
+/* CLIPFREE FULL-SITE STABILITY AUDIT v29 */
+/*
+  Runtime hardening after a full repository audit.
+
+  Preserved:
+  - YouTube reviewer/audit flow and all three reviewer URLs
+  - v28 10-Short max + real YouTube ID grace window
+  - v27 reviewer evidence + mobile speed profile
+  - all SEO, source, motion, duplicate and rights protections
+
+  Added:
+  - permanent 10-Short selector guard so older category code cannot re-add 11–20
+  - real upload-ID tracker synchronization
+  - longer bounded federated-source window to reduce false source timeouts
+  - one visible v29 status marker in normal mode
+*/
+(() => {
+  'use strict';
+
+  const MAX_BATCH = 10;
+  const selectorIds = [
+    'simpleCount',
+    'wizardBatchCount',
+    'autoBatchCount',
+    'animalBatchCount'
+  ];
+
+  function reviewerMode() {
+    const q = new URLSearchParams(location.search);
+    return q.get('audit') === '1' ||
+           q.get('compliance') === '1' ||
+           q.get('review') === '1';
+  }
+
+  function sanitizeBatchSelectors() {
+    for (const id of selectorIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+
+      if (el.tagName === 'SELECT') {
+        [...el.options].forEach(option => {
+          const n = Number(option.value);
+          if (Number.isFinite(n) && n > MAX_BATCH) option.remove();
+        });
+      }
+
+      try { el.max = String(MAX_BATCH); } catch {}
+
+      const current = Number(el.value || 1);
+      if (Number.isFinite(current) && current > MAX_BATCH) {
+        el.value = String(MAX_BATCH);
+        el.dispatchEvent(new Event('input', {bubbles:true}));
+        el.dispatchEvent(new Event('change', {bubbles:true}));
+      }
+    }
+
+    // Remove obsolete legacy 20-Short cards if an older script recreated them.
+    document.getElementById('clipfree20AnimalCard')?.remove();
+    document.getElementById('clipfree20Hero')?.remove();
+  }
+
+  let queued = false;
+  function queueSanitize() {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      sanitizeBatchSelectors();
+    });
+  }
+
+  sanitizeBatchSelectors();
+
+  // Permanent observer: older category code used delayed timers that could add
+  // 11–20 after the earlier one-time cleanup had already finished.
+  const observer = new MutationObserver(queueSanitize);
+  observer.observe(document.documentElement, {
+    childList:true,
+    subtree:true
+  });
+
+  window.addEventListener('pageshow', sanitizeBatchSelectors);
+
+  // Keep every tracker in agreement about the latest REAL YouTube ID.
+  window.addEventListener('clipfree-youtube-upload-transferred', event => {
+    const id = String(event?.detail?.videoId || '').trim();
+    if (!id) return;
+
+    const state = window.ClipFreeTransferredUploadState;
+    if (state && typeof state === 'object') {
+      state.lastVideoId = id;
+      state.lastTransferredAt = new Date().toISOString();
+    }
+  });
+
+  function addBadge() {
+    if (reviewerMode()) return true;
+    if (document.getElementById('clipfreeV29Status')) return true;
+
+    const head = document.querySelector('#clipfreeSimpleStudio .simple-head');
+    if (!head) return false;
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeV29Status';
+    card.style.cssText =
+      'margin:12px 0;padding:11px 13px;border:1px solid #2d6a49;border-radius:13px;' +
+      'background:#0c1711;color:#acf2c2;font-size:.76rem;font-weight:900;line-height:1.45';
+    card.textContent =
+      '✓ v29 FULL-SITE STABILITY • max 10 Shorts • upload-ID sync • reviewer evidence preserved';
+    head.appendChild(card);
+    return true;
+  }
+
+  addBadge();
+  const badgeTimer = setInterval(() => {
+    sanitizeBatchSelectors();
+    if (addBadge()) clearInterval(badgeTimer);
+  }, 180);
+  setTimeout(() => clearInterval(badgeTimer), 30000);
+
+  window.CLIPFREE_V29 = {
+    version:'29.0',
+    fullRepoAudit:true,
+    maxBatch:MAX_BATCH,
+    uploadIdSync:true,
+    reviewerFlowChanged:false,
+    sourceSearchTimeoutMs:18000
   };
 })();

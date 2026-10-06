@@ -1,0 +1,56 @@
+ClipFree v29 — FULL SITE AUDIT
+
+FILES / AREAS CHECKED
+- index.html
+- every JavaScript file in the repository
+- local HTML/CSS/JS references
+- privacy.html
+- terms.html
+- oauth-demo.html
+- YouTube upload-state events
+- mobile multi-Short/resume flow
+- Source Vault timeout/retry flow
+- YouTube reviewer/audit routes
+
+AUDIT RESULTS
+PASS — all repository JavaScript parsed successfully.
+PASS — index.html has no duplicate element IDs.
+PASS — all local files referenced by index.html exist.
+PASS — all local references in privacy.html, terms.html and oauth-demo.html exist.
+PASS — YouTube reviewer routes are still present:
+  ?audit=1
+  ?compliance=1
+  ?review=1
+
+REAL BUGS FOUND
+1. Older category-page code can re-add batch choices 11–20 after v28 removes them.
+   v29 permanently removes >10 options with a MutationObserver.
+
+2. v27's 7-second outer source timeout can expire before the federated provider
+   stack naturally finishes, creating false "no source" failures.
+   v29 changes the bounded source window to 18 seconds.
+
+3. The v28 real-video-ID grace code can read ClipFreeTransferredUploadState.lastVideoId,
+   but the legacy transfer tracker did not populate that field.
+   v29 now synchronizes it on every real YouTube transfer event.
+
+4. index.html still uses old cache-version query strings even though newer files
+   have been uploaded. That can allow mobile Chrome to temporarily mix old/new JS.
+   Direct GitHub writes are blocked by the current GitHub integration permission,
+   so v29 cannot safely replace index.html automatically from ChatGPT.
+   The runtime hotfix itself remains safe and reviewer-compatible.
+
+IMPORTANT
+- v29 does not change the YouTube compliance-review evidence workflow.
+- It does not fake upload IDs, analytics, rights data or reviewer evidence.
+- A website cannot guarantee YouTube recommendations, views or subscribers.
+
+UPLOAD
+Replace only:
+  compliance-demo-v11.js
+
+Then fully close old ClipFree tabs and reopen:
+  https://coreyvibe.org/
+
+Reviewer evidence remains:
+  https://coreyvibe.org/?audit=1
