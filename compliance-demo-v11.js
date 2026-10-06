@@ -1897,3 +1897,531 @@
 
   window.addEventListener('clipfree-youtube-ready', () => setTimeout(patch, 0));
 })();
+
+/* CLIPFREE KEEP-AWAKE + RESUME v19 */
+/*
+  Mobile reliability:
+  - requests a screen wake lock while a 2–20 Short batch is running
+  - saves progress after every real YouTube video ID
+  - shows Resume Remaining after an interruption/reload
+  - keeps the existing v18 source/encoder speed improvements
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const KEY = 'clipfree_batch_checkpoint_v19';
+  const MAX_SOURCE_RETRIES = 3;
+
+  let running = false;
+  let wakeLock = null;
+
+  const TOPICS = {
+    wildlife:  {preset:'wildlife', query:'clipfree variety wildlife'},
+    lions:     {preset:'lions',    query:'lion wildlife'},
+    moose:     {preset:'wildlife', query:'moose wildlife alces alces'},
+    tigers:    {preset:'wildlife', query:'tiger wildlife panthera tigris'},
+    elephants: {preset:'wildlife', query:'elephant wildlife safari'},
+    wolves:    {preset:'wildlife', query:'wolf wildlife canis lupus'},
+    bears:     {preset:'wildlife', query:'bear wildlife nature'},
+    kittens:   {preset:'kittens',  query:'cute kittens playing'},
+    puppies:   {preset:'puppies',  query:'cute puppies playing'}
+  };
+
+  function loadCheckpoint() {
+    try {
+      const v = JSON.parse(localStorage.getItem(KEY) || 'null');
+      return v && typeof v === 'object' ? v : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveCheckpoint(value) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        ...(loadCheckpoint() || {}),
+        ...value,
+        updatedAt:new Date().toISOString()
+      }));
+    } catch {}
+    renderResumeButton();
+  }
+
+  function clearCheckpoint() {
+    try { localStorage.removeItem(KEY); } catch {}
+    renderResumeButton();
+  }
+
+  function setStatus(text, kind = '') {
+    const el = $('simpleStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className = `simple-status ${kind}`.trim();
+  }
+
+  function setProgress(done, total) {
+    const bar = $('simpleProgress');
+    if (bar) bar.style.width = `${Math.max(0, Math.min(100, (done / Math.max(1,total)) * 100))}%`;
+  }
+
+  function transferredCount() {
+    return Math.max(
+      Number(window.ClipFreeYouTubeProcessingState?.transferred || 0),
+      Number(window.ClipFreeTransferredUploadState?.total || 0)
+    );
+  }
+
+  function exactFailure() {
+    const values = [
+      $('animalGeneratorStatus')?.textContent,
+      $('youtubeUploadStatus')?.textContent,
+      window.ClipFreeTransferredUploadState?.lastError,
+      window.ClipFreeConfirmedUploadState?.lastError,
+      window.ClipFreeYouTubeProcessingState?.lastError
+    ].map(x => String(x || '').trim()).filter(Boolean);
+
+    return values.find(x =>
+      /(error|failed|stopped|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|unused source)/i.test(x)
+    ) || '';
+  }
+
+  function retryableSourceFailure(message) {
+    const m = String(message || '').toLowerCase();
+    return (
+      m.includes('still-picture') ||
+      m.includes('repeated-frame') ||
+      m.includes('moving replacement') ||
+      m.includes('unused source') ||
+      m.includes('no suitable') ||
+      m.includes('different unused')
+    );
+  }
+
+  function hardFailure(message) {
+    const m = String(message || '').toLowerCase();
+    return (
+      m.includes('quota') ||
+      m.includes('upload limit') ||
+      m.includes('daily video-upload') ||
+      m.includes('unauthorized') ||
+      m.includes('forbidden') ||
+      m.includes('oauth') ||
+      m.includes('permission') ||
+      m.includes('401') ||
+      m.includes('403')
+    );
+  }
+
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') {
+      updateWakeBadge();
+      return false;
+    }
+    if (wakeLock) return true;
+
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => {
+        wakeLock = null;
+        updateWakeBadge();
+      }, {once:true});
+      updateWakeBadge();
+      return true;
+    } catch (err) {
+      console.warn('Wake lock unavailable', err);
+      wakeLock = null;
+      updateWakeBadge();
+      return false;
+    }
+  }
+
+  async function releaseWakeLock() {
+    const w = wakeLock;
+    wakeLock = null;
+    try { await w?.release?.(); } catch {}
+    updateWakeBadge();
+  }
+
+  function updateWakeBadge() {
+    const el = $('clipfreeWakeBadge');
+    if (!el) return;
+
+    if (running && wakeLock) {
+      el.textContent = '☀️ KEEP-AWAKE ON — leave ClipFree visible';
+      el.style.color = '#9ae6b4';
+      el.style.borderColor = '#285c3d';
+    } else if (running) {
+      el.textContent = '⚠️ Keep the screen ON and ClipFree visible';
+      el.style.color = '#ffd18b';
+      el.style.borderColor = '#6d5422';
+    } else {
+      el.textContent = '🌙 Resume protection ready';
+      el.style.color = '#b9b3cc';
+      el.style.borderColor = '#393443';
+    }
+  }
+
+  function ensureWakeUi() {
+    const body = $('clipfreeSimpleStudio')?.querySelector('.simple-body');
+    if (!body) return false;
+
+    if (!$('clipfreeWakeBadge')) {
+      const el = document.createElement('div');
+      el.id = 'clipfreeWakeBadge';
+      el.style.cssText = 'margin:0 0 14px;padding:10px 12px;border:1px solid #393443;border-radius:12px;background:#111018;font-size:.76rem;font-weight:800;line-height:1.4';
+      body.insertBefore(el, body.firstChild);
+    }
+
+    updateWakeBadge();
+    renderResumeButton();
+    return true;
+  }
+
+  function renderResumeButton() {
+    const start = $('simpleStart');
+    if (!start?.parentNode) return;
+
+    const cp = loadCheckpoint();
+    const remaining = cp?.active
+      ? Math.max(0, Number(cp.requested || 0) - Number(cp.completed || 0))
+      : 0;
+
+    let btn = $('clipfreeResumeBatch');
+
+    if (!remaining) {
+      btn?.remove();
+      return;
+    }
+
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'clipfreeResumeBatch';
+      btn.type = 'button';
+      btn.className = 'simple-start';
+      btn.style.marginTop = '10px';
+      btn.style.background = 'linear-gradient(135deg,#166534,#15803d 58%,#22c55e)';
+      start.parentNode.insertBefore(btn, start.nextSibling);
+    }
+
+    btn.disabled = running;
+    btn.textContent = `▶ RESUME ${remaining} REMAINING SHORT${remaining === 1 ? '' : 'S'}`;
+  }
+
+  function setValue(id, value) {
+    const el = $(id);
+    if (!el || value === undefined || value === null) return;
+    el.value = String(value);
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }
+
+  function readSettings() {
+    return {
+      topic:$('simpleTopic')?.value || 'wildlife',
+      style:$('simpleStyle')?.value || 'documentary',
+      duration:Math.max(10, Math.min(60, Number($('simpleDuration')?.value || 30))),
+      privacy:$('simplePrivacy')?.value || 'private'
+    };
+  }
+
+  function applySettings(s = {}) {
+    if (s.topic) setValue('simpleTopic', s.topic);
+    if (s.style) setValue('simpleStyle', s.style);
+    if (s.duration) setValue('simpleDuration', s.duration);
+    if (s.privacy) setValue('simplePrivacy', s.privacy);
+  }
+
+  function syncOne(s) {
+    const topic = TOPICS[s.topic] || TOPICS.wildlife;
+    window.ClipFreeVarietyMode = s.topic === 'wildlife';
+
+    document.querySelector(`[data-animal-preset="${topic.preset}"]`)?.click();
+    setValue('animalTopic', topic.query);
+    setValue('animalStyle', s.style);
+    setValue('animalDuration', s.duration);
+    setValue('animalBatchCount', 1);
+    setValue('autoPrivacy', s.privacy);
+
+    const sound = $('animalSounds');
+    if (sound) {
+      sound.checked = true;
+      sound.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+
+    const rights = Boolean($('simpleRights')?.checked);
+    if ($('autoUploadCertification')) $('autoUploadCertification').checked = rights;
+    if ($('clipfree20Rights')) $('clipfree20Rights').checked = rights;
+    return rights;
+  }
+
+  async function waitForCycle(button, timeoutMs = 45 * 60 * 1000) {
+    const started = Date.now();
+
+    while (!button.disabled && Date.now() - started < 8000) {
+      await sleep(80);
+    }
+
+    if (!button.disabled) {
+      throw new Error('ClipFree could not start the Short generator. Refresh and try again.');
+    }
+
+    while (button.disabled) {
+      if (Date.now() - started > timeoutMs) {
+        throw new Error('This Short took unusually long. Your saved batch can be resumed.');
+      }
+      await sleep(650);
+    }
+  }
+
+  async function runBatch(total, resumeCheckpoint = null) {
+    if (running) return;
+
+    const requested = Math.max(2, Math.min(20, Number(total || 2)));
+    const startButton = $('simpleStart');
+    const generator = $('generateAnimalVideo');
+
+    running = true;
+    renderResumeButton();
+
+    try {
+      if (!generator) throw new Error('The Short generator is not available. Refresh ClipFree.');
+      if (!window.ClipFreeYouTube?.isConnected?.()) {
+        throw new Error('Connect YouTube first. Your saved batch progress will remain on this device.');
+      }
+
+      const settings = resumeCheckpoint?.settings || readSettings();
+      applySettings(settings);
+
+      if (!$('simpleRights')?.checked) {
+        throw new Error('Tick the content-rights / Community Guidelines confirmation first.');
+      }
+
+      await requestWakeLock();
+
+      let completed = Math.max(
+        0,
+        Math.min(requested, Number(resumeCheckpoint?.completed || 0))
+      );
+
+      saveCheckpoint({
+        active:true,
+        requested,
+        completed,
+        settings,
+        startedAt:resumeCheckpoint?.startedAt || new Date().toISOString()
+      });
+
+      if (startButton) startButton.disabled = true;
+      setProgress(completed, requested);
+
+      while (completed < requested) {
+        let success = false;
+
+        for (let attempt = 1; attempt <= MAX_SOURCE_RETRIES && !success; attempt++) {
+          if (!syncOne(settings)) {
+            throw new Error('Rights confirmation was turned off. Tick it again to continue.');
+          }
+
+          const before = transferredCount();
+
+          setStatus(
+            `Short ${completed + 1}/${requested}: fast real-video source` +
+            (attempt > 1 ? ` — retry ${attempt}/${MAX_SOURCE_RETRIES}` : '') +
+            `. ${completed}/${requested} completed. Keep the screen on…`
+          );
+
+          generator.click();
+          await waitForCycle(generator);
+
+          const after = transferredCount();
+
+          if (after > before) {
+            completed += 1;
+            success = true;
+
+            saveCheckpoint({
+              active:completed < requested,
+              requested,
+              completed,
+              settings
+            });
+
+            setProgress(completed, requested);
+            setStatus(
+              `${completed}/${requested} Shorts reached YouTube with real video IDs ❤️ ` +
+              (completed < requested
+                ? `Preparing Short ${completed + 1}/${requested}.`
+                : 'Batch complete.'),
+              'good'
+            );
+
+            if (completed < requested) await sleep(650);
+            continue;
+          }
+
+          const reason = exactFailure() || 'No YouTube video ID was returned.';
+
+          if (hardFailure(reason)) {
+            throw new Error(`Short ${completed + 1}/${requested} stopped: ${reason}`);
+          }
+
+          if (retryableSourceFailure(reason) && attempt < MAX_SOURCE_RETRIES) {
+            setStatus(
+              `Short ${completed + 1}/${requested}: bad/still source skipped. Trying another (${attempt + 1}/${MAX_SOURCE_RETRIES})…`,
+              'bad'
+            );
+            await sleep(550);
+            continue;
+          }
+
+          throw new Error(`Short ${completed + 1}/${requested} did not upload. ${reason}`);
+        }
+      }
+
+      clearCheckpoint();
+      setProgress(requested, requested);
+      setStatus(`All ${requested}/${requested} Shorts reached YouTube with real video IDs ❤️`, 'good');
+    } catch (err) {
+      console.error('ClipFree v19 batch interrupted', err);
+      const cp = loadCheckpoint();
+      if (cp?.requested && Number(cp.completed || 0) < Number(cp.requested || 0)) {
+        saveCheckpoint({...cp, active:true, lastError:err?.message || String(err)});
+      }
+
+      setStatus(
+        `${err?.message || err} Progress is saved. Reconnect YouTube if needed, then tap Resume Remaining.`,
+        'bad'
+      );
+    } finally {
+      running = false;
+      if (startButton) startButton.disabled = false;
+      await releaseWakeLock();
+      renderResumeButton();
+    }
+  }
+
+  // Window capture runs before the older document-level multi-batch handlers.
+  window.addEventListener('click', event => {
+    const start = event.target?.closest?.('#simpleStart');
+    const resume = event.target?.closest?.('#clipfreeResumeBatch');
+
+    if (start) {
+      const requested = Math.max(1, Math.min(20, Number($('simpleCount')?.value || 1)));
+      if (requested <= 1) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      clearCheckpoint();
+      runBatch(requested, null);
+      return;
+    }
+
+    if (resume) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const cp = loadCheckpoint();
+      if (!cp?.active) return renderResumeButton();
+
+      applySettings(cp.settings || {});
+      if ($('simpleCount')) $('simpleCount').value = String(cp.requested || 2);
+      runBatch(cp.requested || 2, cp);
+    }
+  }, true);
+
+  document.addEventListener('visibilitychange', () => {
+    if (running && document.visibilityState === 'visible') {
+      requestWakeLock().catch(() => {});
+      setStatus('Batch is back in the foreground. Keep ClipFree visible until it finishes…');
+    }
+  });
+
+  window.addEventListener('pageshow', () => {
+    ensureWakeUi();
+    renderResumeButton();
+  });
+
+  const timer = setInterval(() => {
+    if (ensureWakeUi()) clearInterval(timer);
+  }, 150);
+  setTimeout(() => clearInterval(timer), 30000);
+
+  window.ClipFreeBatchResume = {
+    version:'19.0',
+    checkpoint:loadCheckpoint,
+    clear:clearCheckpoint,
+    resume() {
+      const cp = loadCheckpoint();
+      if (cp?.active) return runBatch(cp.requested || 2, cp);
+    },
+    wakeLockActive:() => Boolean(wakeLock)
+  };
+})();
+
+/* CLIPFREE QUALITY UPLOAD TURBO v20 */
+/*
+  Upload-side optimization with NO extra quality reduction:
+  - throttles expensive progress/UI callbacks during YouTube upload
+  - avoids hundreds/thousands of DOM updates on mobile
+  - does not change the bytes being uploaded
+  - leaves the browser/network stack free to spend more time on the actual transfer
+
+  Important: no web page can increase the phone carrier/Wi-Fi uplink itself.
+  The biggest upload-speed factor remains final MP4 size and connection speed.
+*/
+(() => {
+  'use strict';
+
+  if (window.__clipfreeQualityUploadTurboV20) return;
+  window.__clipfreeQualityUploadTurboV20 = true;
+
+  const NativeXHR = window.XMLHttpRequest;
+  if (!NativeXHR?.prototype) return;
+
+  const open = NativeXHR.prototype.open;
+  const send = NativeXHR.prototype.send;
+
+  NativeXHR.prototype.open = function(method, url, ...rest) {
+    this.__clipfreeYoutubeVideoUpload = /googleapis\.com\/upload\/youtube\/v3\/videos/i.test(String(url || ''));
+    return open.call(this, method, url, ...rest);
+  };
+
+  NativeXHR.prototype.send = function(body) {
+    if (this.__clipfreeYoutubeVideoUpload && this.upload?.onprogress && !this.__clipfreeProgressWrapped) {
+      this.__clipfreeProgressWrapped = true;
+      const original = this.upload.onprogress;
+      let lastAt = 0;
+      let lastRatio = -1;
+
+      this.upload.onprogress = event => {
+        if (!event?.lengthComputable) return original.call(this.upload, event);
+
+        const ratio = event.total ? event.loaded / event.total : 0;
+        const now = globalThis.performance?.now?.() ?? Date.now();
+
+        // Update the UI at most ~8 times/sec or each 1% transferred.
+        if (
+          ratio >= 1 ||
+          ratio - lastRatio >= 0.01 ||
+          now - lastAt >= 125
+        ) {
+          lastAt = now;
+          lastRatio = ratio;
+          original.call(this.upload, event);
+        }
+      };
+    }
+
+    return send.call(this, body);
+  };
+
+  window.CLIPFREE_UPLOAD_QUALITY_TURBO = {
+    version:'20.0',
+    enabled:true,
+    qualityReduced:false,
+    optimization:'throttled mobile upload UI overhead'
+  };
+})();

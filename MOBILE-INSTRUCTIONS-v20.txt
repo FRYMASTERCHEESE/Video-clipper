@@ -1,0 +1,41 @@
+ClipFree Quality Upload Turbo v20 — MOBILE ONLY
+
+This version COMBINES:
+- v19 Keep-Awake + Resume
+- v18 fast real-video source search
+- Motion Guard / real moving footage protection
+- v20 quality-preserving upload optimization
+
+UPLOAD/REPLACE TWO FILES:
+1. compliance-demo-v11.js
+2. video-engine-v7.js
+
+QUALITY:
+- 720 x 1280 true vertical HD
+- 30 fps
+- H.264 CRF 22
+- up to ~2.2 Mbps video
+- 128 kbps AAC audio
+- superfast encoder
+- no extra low-bitrate 1.5 Mbps squeeze from v18
+
+SPEED:
+- final MP4 remains mobile-friendly instead of huge 1080p files
+- YouTube upload progress UI is throttled so it does not hammer the mobile browser
+- v19 keeps the screen awake and lets interrupted batches resume
+- v18 still searches smaller real source videos first
+
+IMPORTANT:
+This preserves substantially better visual/audio quality than the v18 mobile
+1.5 Mbps / CRF 26 profile. Actual upload speed is still limited by your Wi-Fi/
+mobile uplink and YouTube. There is no way to make the physical connection faster
+without either a smaller file or better internet.
+
+After upload:
+1. Commit both files to main.
+2. Wait 1–2 minutes.
+3. Fully close old coreyvibe.org tabs.
+4. Reopen ClipFree.
+5. Connect YouTube.
+6. Try 8 Shorts.
+7. Keep the tab visible; the wake-lock badge should show while the batch runs.
