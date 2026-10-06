@@ -1,0 +1,30 @@
+ClipFree Federated Source Vault v22 — MOBILE ONLY
+
+Replace ONE file:
+  compliance-demo-v11.js
+
+What v22 fixes:
+- Stops unrelated animals from getting through a species-specific search.
+- Example: a bear search will not return a Monarch butterfly.
+- Searches THREE automatic zero-key repositories in parallel:
+  1. Wikimedia Commons
+  2. Internet Archive
+  3. Library of Congress records explicitly marked Public Domain / Free to Use and Reuse
+- Prefers smaller files for phone speed.
+- Keeps item-level source and licence attribution.
+- Keeps all existing v21/v20/v19/v18 features.
+
+About "100+ sites":
+A current directory lists 150 places for open/free media discovery, but many are NOT
+video sites, require API keys, forbid scraping, or have item-specific licences.
+ClipFree will not pretend it can legally auto-download from all 150.
+
+The new Source Vault card links to that 150-source directory while automatic downloads
+stay limited to structured providers whose files/rights can be checked.
+
+After upload:
+1. Commit to main.
+2. Wait 1–2 minutes.
+3. Fully close old coreyvibe.org tabs.
+4. Reopen ClipFree and connect YouTube.
+5. Try 8 first, then 20.

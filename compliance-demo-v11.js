@@ -2885,3 +2885,469 @@
     resetTimezone:TZ
   };
 })();
+
+/* CLIPFREE FEDERATED SOURCE VAULT v22 */
+/*
+  Multi-repository source discovery with strict animal matching.
+
+  Automatic, zero-key repositories:
+  1) Wikimedia Commons
+  2) Internet Archive
+  3) Library of Congress (only explicit public-domain/free-to-use video records)
+
+  Why not blindly scrape 100+ websites?
+  Many free-media sites require API keys, forbid automated scraping, mix paid/free
+  content, or use licenses that need item-level review. v22 only auto-downloads
+  from structured repositories where the item can be checked before use.
+
+  The public source directory panel links to a current 150-source discovery guide,
+  but ClipFree only auto-uses files that pass its own license + animal checks.
+*/
+(() => {
+  'use strict';
+
+  const FLAG = '__clipfreeFederatedSourceVaultV22';
+  const MAX_BYTES = 22 * 1024 * 1024;
+  const $ = id => document.getElementById(id);
+
+  const ANIMALS = [
+    ['mountain lion', /\b(mountain lion|cougar|puma)\b/i],
+    ['lion', /\b(lion|lioness|panthera leo)\b/i],
+    ['tiger', /\b(tiger|panthera tigris)\b/i],
+    ['leopard', /\b(leopard|panthera pardus)\b/i],
+    ['cheetah', /\bcheetah\b/i],
+    ['jaguar', /\bjaguar\b/i],
+    ['lynx', /\blynx\b/i],
+    ['bobcat', /\bbobcat\b/i],
+    ['wolf', /\b(wolf|wolves|canis lupus)\b/i],
+    ['coyote', /\bcoyote\b/i],
+    ['fox', /\b(fox|vulpes)\b/i],
+    ['bear', /\b(bear|grizzly|ursus|polar bear)\b/i],
+    ['elephant', /\belephant\b/i],
+    ['giraffe', /\bgiraffe\b/i],
+    ['zebra', /\bzebra\b/i],
+    ['rhino', /\b(rhino|rhinoceros)\b/i],
+    ['hippo', /\b(hippo|hippopotamus)\b/i],
+    ['bison', /\b(bison|buffalo)\b/i],
+    ['moose', /\b(moose|alces)\b/i],
+    ['elk', /\belk\b/i],
+    ['deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
+    ['antelope', /\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+    ['kangaroo', /\bkangaroo\b/i],
+    ['koala', /\bkoala\b/i],
+    ['otter', /\botter\b/i],
+    ['rabbit', /\b(rabbit|hare)\b/i],
+    ['squirrel', /\b(squirrel|chipmunk|marmot|prairie dog)\b/i],
+    ['gorilla', /\bgorilla\b/i],
+    ['chimpanzee', /\bchimpanzee\b/i],
+    ['orangutan', /\borangutan\b/i],
+    ['monkey', /\b(monkey|macaque|baboon|gibbon|lemur)\b/i],
+    ['hyena', /\b(hyena|hyaena)\b/i],
+    ['meerkat', /\bmeerkat\b/i],
+    ['crocodile', /\bcrocodile\b/i],
+    ['alligator', /\balligator\b/i],
+    ['turtle', /\b(turtle|tortoise)\b/i],
+    ['snake', /\b(snake|python|cobra|rattlesnake|boa)\b/i],
+    ['eagle', /\beagle\b/i],
+    ['hawk', /\bhawk\b/i],
+    ['falcon', /\bfalcon\b/i],
+    ['owl', /\bowl\b/i],
+    ['penguin', /\bpenguin\b/i],
+    ['shark', /\bshark\b/i],
+    ['whale', /\b(whale|orca)\b/i],
+    ['dolphin', /\bdolphin\b/i],
+    ['seal', /\b(seal|sea lion|walrus)\b/i],
+    ['frog', /\b(frog|toad)\b/i],
+    ['butterfly', /\bbutterfly\b/i],
+    ['bee', /\bbee\b/i],
+    ['beetle', /\bbeetle\b/i],
+    ['spider', /\bspider\b/i],
+    ['crab', /\bcrab\b/i],
+    ['fish', /\b(fish|salmon|trout|tuna|clownfish)\b/i],
+    ['cat', /\b(cat|kitten)\b/i],
+    ['dog', /\b(dog|puppy)\b/i]
+  ];
+
+  function stripHtml(value = '') {
+    const box = document.createElement('div');
+    box.innerHTML = String(value || '');
+    return (box.textContent || box.innerText || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function expectedAnimal(query = '') {
+    const q = String(query || '');
+    return ANIMALS.find(([,rx]) => rx.test(q)) || null;
+  }
+
+  function actualAnimal(item = {}) {
+    const text = [
+      item.title, item.description, item.subject, item.attribution, item.creator
+    ].map(x => Array.isArray(x) ? x.join(' ') : String(x || '')).join(' ');
+    return ANIMALS.find(([,rx]) => rx.test(text)) || null;
+  }
+
+  function matchesQuery(item, query) {
+    const wanted = expectedAnimal(query);
+    const actual = actualAnimal(item);
+
+    // Species-specific request: reject unrelated animals before the generator ever sees them.
+    if (wanted) return Boolean(actual && actual[0] === wanted[0]);
+
+    // Broad wildlife searches still require the metadata to identify a real animal.
+    if (/\b(wildlife|wild animal|animals?|nature)\b/i.test(String(query || ''))) {
+      return Boolean(actual);
+    }
+
+    return true;
+  }
+
+  function goodCcUrl(url = '') {
+    const s = String(url || '').toLowerCase();
+    if (!s) return false;
+    if (/creativecommons\.org\/publicdomain\/(zero|mark)\//.test(s)) return true;
+    if (/creativecommons\.org\/licenses\/by\//.test(s)) return true;
+    return false;
+  }
+
+  function goodLicenseLabel(label = '') {
+    const s = String(label || '').toLowerCase();
+    return (
+      s.includes('public domain') ||
+      s.includes('cc0') ||
+      (
+        (s.includes('cc by') || s.includes('creative commons attribution')) &&
+        !s.includes('by-sa') &&
+        !s.includes('noncommercial') &&
+        !s.includes('no derivatives')
+      )
+    );
+  }
+
+  function encodePath(path = '') {
+    return String(path).split('/').map(part => encodeURIComponent(part)).join('/');
+  }
+
+  async function fetchJson(url, timeoutMs = 7000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        mode:'cors',
+        cache:'no-store',
+        signal:controller.signal
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // ---------- Wikimedia Commons ----------
+  function commonsFilePageUrl(title) {
+    return `https://commons.wikimedia.org/wiki/${encodeURIComponent(String(title || '').replace(/ /g, '_')).replace(/%2F/g, '/')}`;
+  }
+
+  async function searchWikimedia(query, limit = 10) {
+    const url = new URL('https://commons.wikimedia.org/w/api.php');
+    const params = {
+      action:'query',
+      generator:'search',
+      gsrsearch:`${query} filetype:video filesize:<22528`,
+      gsrnamespace:'6',
+      gsrlimit:String(Math.max(8, Math.min(24, limit * 2))),
+      prop:'imageinfo',
+      iiprop:'url|size|mime|mediatype|extmetadata',
+      iiurlwidth:'480',
+      format:'json',
+      formatversion:'2',
+      origin:'*'
+    };
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+
+    const data = await fetchJson(url.toString());
+    const items = (data?.query?.pages || []).map(page => {
+      const info = page?.imageinfo?.[0] || {};
+      const meta = info.extmetadata || {};
+      const mv = key => stripHtml(meta?.[key]?.value || '');
+      const title = String(page?.title || 'Wikimedia Commons video').replace(/^File:/i, '');
+      const creator = mv('Artist') || mv('Credit') || 'Wikimedia Commons contributor';
+      const license = mv('LicenseShortName') || mv('UsageTerms') || '';
+      const licenseUrl = mv('LicenseUrl');
+      const sourceUrl = commonsFilePageUrl(page?.title || '');
+      return {
+        title, creator, license, licenseUrl, sourceUrl,
+        fileUrl:info.url || '',
+        thumbUrl:info.thumburl || '',
+        mime:info.mime || '',
+        size:Number(info.size || 0),
+        provider:'Wikimedia Commons',
+        description:mv('ImageDescription'),
+        attribution:`“${title}” — ${creator}. Source: Wikimedia Commons. Licence: ${license}${licenseUrl ? ` (${licenseUrl})` : ''}. ${sourceUrl}`
+      };
+    });
+
+    return items.filter(item =>
+      item.fileUrl &&
+      String(item.mime).startsWith('video/') &&
+      (!item.size || item.size <= MAX_BYTES) &&
+      (goodLicenseLabel(item.license) || goodCcUrl(item.licenseUrl)) &&
+      matchesQuery(item, query)
+    );
+  }
+
+  // ---------- Internet Archive ----------
+  async function archiveMetadata(identifier) {
+    return fetchJson(`https://archive.org/metadata/${encodeURIComponent(identifier)}`, 8000);
+  }
+
+  function archiveLicense(meta = {}) {
+    const licenseUrl = String(meta?.metadata?.licenseurl || meta?.metadata?.license || '');
+    const label = String(meta?.metadata?.rights || meta?.metadata?.license || licenseUrl || '');
+    return {licenseUrl, label};
+  }
+
+  function chooseArchiveVideo(meta = {}) {
+    const files = Array.isArray(meta.files) ? meta.files : [];
+    const videos = files
+      .map(file => ({
+        name:String(file?.name || ''),
+        size:Number(file?.size || 0),
+        format:String(file?.format || ''),
+        source:String(file?.source || '')
+      }))
+      .filter(file =>
+        /\.(mp4|webm|ogv)$/i.test(file.name) &&
+        (!file.size || (file.size >= 96 * 1024 && file.size <= MAX_BYTES))
+      )
+      .sort((a,b) => Number(a.size || 999999999) - Number(b.size || 999999999));
+
+    return videos[0] || null;
+  }
+
+  async function searchInternetArchive(query, limit = 8) {
+    const url = new URL('https://archive.org/advancedsearch.php');
+    url.searchParams.set('q', `${query} AND mediatype:(movies)`);
+    ['identifier','title','description','creator','licenseurl','subject'].forEach(f => url.searchParams.append('fl[]', f));
+    url.searchParams.set('rows', String(Math.max(6, Math.min(12, limit))));
+    url.searchParams.set('page', '1');
+    url.searchParams.set('output', 'json');
+
+    const data = await fetchJson(url.toString(), 8000);
+    const docs = (data?.response?.docs || []).slice(0, Math.max(6, Math.min(10, limit)));
+
+    const detailed = await Promise.allSettled(
+      docs.map(async doc => {
+        const identifier = String(doc?.identifier || '');
+        if (!identifier) return null;
+
+        const meta = await archiveMetadata(identifier);
+        const rights = archiveLicense(meta);
+        if (!(goodCcUrl(rights.licenseUrl) || goodLicenseLabel(rights.label))) return null;
+
+        const file = chooseArchiveVideo(meta);
+        if (!file?.name) return null;
+
+        const title = String(meta?.metadata?.title || doc?.title || identifier);
+        const creator = String(meta?.metadata?.creator || doc?.creator || 'Internet Archive contributor');
+        const description = stripHtml(meta?.metadata?.description || doc?.description || '');
+        const subject = meta?.metadata?.subject || doc?.subject || '';
+        const sourceUrl = `https://archive.org/details/${encodeURIComponent(identifier)}`;
+        const fileUrl = `https://archive.org/download/${encodeURIComponent(identifier)}/${encodePath(file.name)}`;
+        const license = rights.label || rights.licenseUrl || 'Open licence';
+
+        const item = {
+          title, creator, description, subject, sourceUrl, fileUrl,
+          license, licenseUrl:rights.licenseUrl,
+          mime:/\.mp4$/i.test(file.name) ? 'video/mp4' :
+               /\.ogv$/i.test(file.name) ? 'video/ogg' : 'video/webm',
+          size:file.size || 0,
+          provider:'Internet Archive',
+          attribution:`“${title}” — ${creator}. Source: Internet Archive. Licence: ${license}. ${sourceUrl}`
+        };
+
+        return matchesQuery(item, query) ? item : null;
+      })
+    );
+
+    return detailed
+      .filter(x => x.status === 'fulfilled' && x.value)
+      .map(x => x.value);
+  }
+
+  // ---------- Library of Congress ----------
+  function flattenUrls(value, out = []) {
+    if (!value) return out;
+    if (typeof value === 'string') {
+      if (/^https?:\/\//i.test(value) && /\.(mp4|webm|ogv)(?:\?|$)/i.test(value)) out.push(value);
+      return out;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(v => flattenUrls(v, out));
+      return out;
+    }
+    if (typeof value === 'object') {
+      Object.values(value).forEach(v => flattenUrls(v, out));
+    }
+    return out;
+  }
+
+  function locRightsText(result = {}) {
+    return [
+      result?.rights, result?.rights_advisory, result?.rights_information,
+      result?.item?.rights, result?.item?.rights_advisory, result?.item?.rights_information,
+      result?.description
+    ].flat().map(x => String(x || '')).join(' ');
+  }
+
+  async function searchLibraryOfCongress(query, limit = 8) {
+    const url = new URL('https://www.loc.gov/film-and-videos/');
+    url.searchParams.set('q', query);
+    url.searchParams.set('fo', 'json');
+    url.searchParams.set('c', String(Math.max(8, Math.min(16, limit * 2))));
+
+    const data = await fetchJson(url.toString(), 8000);
+    const out = [];
+
+    for (const result of data?.results || []) {
+      const rights = locRightsText(result);
+      if (!/(public domain|free to use and reuse)/i.test(rights)) continue;
+
+      const urls = [...new Set(flattenUrls(result))];
+      const fileUrl = urls[0] || '';
+      if (!fileUrl) continue;
+
+      const title = String(result?.title || result?.item?.title || 'Library of Congress video');
+      const creator = Array.isArray(result?.contributor) ? result.contributor.join(', ') :
+        String(result?.contributor || result?.item?.contributor || 'Library of Congress');
+      const sourceUrl = String(result?.id || result?.url || '');
+      const item = {
+        title,
+        creator,
+        description:stripHtml(result?.description || ''),
+        subject:result?.subject || '',
+        sourceUrl,
+        fileUrl,
+        license:'Public domain / Free to Use and Reuse',
+        licenseUrl:sourceUrl,
+        mime:/\.mp4(?:\?|$)/i.test(fileUrl) ? 'video/mp4' :
+             /\.ogv(?:\?|$)/i.test(fileUrl) ? 'video/ogg' : 'video/webm',
+        size:0,
+        provider:'Library of Congress',
+        attribution:`“${title}” — ${creator}. Source: Library of Congress. Rights: ${rights.slice(0,300)}. ${sourceUrl}`
+      };
+
+      if (matchesQuery(item, query)) out.push(item);
+      if (out.length >= limit) break;
+    }
+
+    return out;
+  }
+
+  // ---------- Federated search ----------
+  function unique(items) {
+    const seen = new Set();
+    return (items || []).filter(item => {
+      const key = String(item?.fileUrl || item?.sourceUrl || item?.title || '').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  async function federatedSearch(query, limit = 12) {
+    const wanted = Math.max(1, Math.min(20, Number(limit || 12)));
+
+    const searches = await Promise.allSettled([
+      searchWikimedia(query, Math.min(12, wanted)),
+      searchInternetArchive(query, Math.min(8, wanted)),
+      searchLibraryOfCongress(query, Math.min(6, wanted))
+    ]);
+
+    const items = [];
+    for (const result of searches) {
+      if (result.status === 'fulfilled') items.push(...result.value);
+      else console.warn('Source Vault provider failed', result.reason);
+    }
+
+    const filtered = unique(items)
+      .filter(item => matchesQuery(item, query))
+      .sort((a,b) => {
+        // Prefer smaller files on phones, but do not prefer unrelated footage.
+        const as = Number(a?.size || 15 * 1024 * 1024);
+        const bs = Number(b?.size || 15 * 1024 * 1024);
+        return as - bs;
+      });
+
+    return filtered.slice(0, wanted);
+  }
+
+  function addDirectoryCard() {
+    if ($('clipfreeFederatedSourcesCard')) return true;
+    const head = $('clipfreeSimpleStudio')?.querySelector('.simple-head');
+    if (!head) return false;
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeFederatedSourcesCard';
+    card.style.cssText = 'margin:14px 0;padding:14px;border:1px solid #443c68;border-radius:16px;background:#11101a;color:#f6f3ff';
+    card.innerHTML = `
+      <strong style="display:block;margin-bottom:5px">🌍 Federated Source Vault v22</strong>
+      <div style="font-size:.76rem;line-height:1.5;color:#bcb6d0">
+        Automatic zero-key search: <b>Wikimedia Commons</b>, <b>Internet Archive</b> and
+        <b>Library of Congress public-domain video</b>.<br>
+        A current open-media directory lists <b>150 discovery sources</b>, but ClipFree will
+        not scrape sites that require API keys or lack machine-readable reuse rights.
+      </div>
+      <a href="https://www.itechguides.com/120-places-to-find-creative-commons-media/"
+         target="_blank" rel="noopener"
+         style="display:inline-block;margin-top:9px;color:#bca8ff;font-weight:800">
+         Browse the 150-source discovery directory
+      </a>
+    `;
+    head.appendChild(card);
+    return true;
+  }
+
+  function patch() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt) return false;
+    if (yt[FLAG]) return true;
+
+    // v22 supersedes the older single-provider search function.
+    yt.searchCommonsDownloadable = federatedSearch;
+    yt[FLAG] = true;
+
+    window.CLIPFREE_FEDERATED_SOURCE_VAULT = {
+      version:'22.0',
+      automaticProviders:[
+        'Wikimedia Commons',
+        'Internet Archive',
+        'Library of Congress'
+      ],
+      discoveryDirectoryCount:150,
+      strictAnimalMatch:true,
+      maxAutomaticFileBytes:MAX_BYTES
+    };
+
+    addDirectoryCard();
+    return true;
+  }
+
+  if (!patch()) {
+    const timer = setInterval(() => {
+      if (patch()) clearInterval(timer);
+      addDirectoryCard();
+    }, 150);
+    setTimeout(() => clearInterval(timer), 30000);
+  }
+
+  window.addEventListener('clipfree-youtube-ready', () => {
+    setTimeout(() => {
+      patch();
+      addDirectoryCard();
+    }, 0);
+  });
+
+  window.addEventListener('pageshow', addDirectoryCard);
+})();
