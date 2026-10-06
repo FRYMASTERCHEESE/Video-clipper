@@ -1,0 +1,34 @@
+ClipFree v23 — SELF-HEAL + ACTUAL-ANIMAL YOUTUBE SEO
+
+Replace ONE file:
+  compliance-demo-v11.js
+
+This fixes the exact screenshot error:
+- "source validation rejected..." is now retryable.
+- The rejected filename is remembered and filtered out.
+- ClipFree automatically tries a different matching source instead of ending the 20-Short run.
+- The latest animal-generator.js is dynamically loaded with a fresh cache key so mobile Chrome cannot keep an older animal validator.
+
+SEO upgrade:
+- Detects the ACTUAL animal from the final source.
+- Species/animal is placed near the start of the title.
+- Titles are unique, accurate and kept concise.
+- 3 relevant hashtags: species + Wildlife + Shorts.
+- Up to 8 relevant tags (tags are kept secondary because YouTube says tags play only a minimal discovery role).
+- Unique keyword-led descriptions with source attribution.
+- Narration is told the actual animal, including species the older narrator did not know such as bumble bees/butterflies.
+
+Important:
+No metadata can guarantee views, Shorts-feed placement or #1 ranking.
+YouTube says Shorts are primarily ranked by viewer response/personalization;
+title, thumbnail and description matter, while tags have only a minor role.
+
+Your saved batch checkpoint is preserved.
+After uploading v23:
+1. Commit to main.
+2. Wait 1–2 minutes.
+3. Fully close old coreyvibe.org tabs.
+4. Reopen ClipFree and reconnect YouTube.
+5. You should see the green "v23 SELF-HEAL ON" status.
+6. Tick the rights box.
+7. Press RESUME 17 REMAINING instead of starting the 20 again.

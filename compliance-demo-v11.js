@@ -1995,7 +1995,9 @@
       m.includes('moving replacement') ||
       m.includes('unused source') ||
       m.includes('no suitable') ||
-      m.includes('different unused')
+      m.includes('different unused') ||
+      m.includes('source validation rejected') ||
+      m.includes('metadata does not identify the requested animal')
     );
   }
 
@@ -2268,8 +2270,9 @@
           }
 
           if (retryableSourceFailure(reason) && attempt < MAX_SOURCE_RETRIES) {
+            window.ClipFreeSourceRepairV23?.rejectFromError?.(reason);
             setStatus(
-              `Short ${completed + 1}/${requested}: bad/still source skipped. Trying another (${attempt + 1}/${MAX_SOURCE_RETRIES})…`,
+              `Short ${completed + 1}/${requested}: unrelated/bad source rejected. Automatically finding another real matching animal video (${attempt + 1}/${MAX_SOURCE_RETRIES})…`,
               'bad'
             );
             await sleep(550);
@@ -3350,4 +3353,489 @@
   });
 
   window.addEventListener('pageshow', addDirectoryCard);
+})();
+
+/* CLIPFREE SELF-HEAL + ACTUAL-ANIMAL SEO v23 */
+/*
+  Fixes the exact "source validation rejected" stop shown in the 20-Short run.
+
+  v23:
+  - treats a metadata mismatch as a retryable source problem instead of ending the batch
+  - remembers rejected source titles and filters them from later searches
+  - reloads the latest animal-generator module with a fresh cache key so mobile
+    browsers cannot keep an older animal taxonomy/validator
+  - makes narration use the ACTUAL detected animal
+  - applies a final species-specific YouTube SEO pass immediately before youtube.js
+    reads the finished export
+  - keeps v22/v21/v20/v19/v18 features
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const REJECT_KEY = 'clipfree_rejected_source_titles_v23';
+  const TITLE_KEY = 'clipfree_actual_animal_titles_v23';
+
+  const ANIMALS = [
+    ['rusty patched bumble bee', /\brusty patched bumble bee\b/i],
+    ['bumble bee', /\b(bumble ?bee|bumblebee|bombus)\b/i],
+    ['monarch butterfly', /\b(monarch butterfly|danaus plexippus)\b/i],
+    ['sea lion', /\bsea lion\b/i],
+    ['whale shark', /\bwhale shark\b/i],
+    ['polar bear', /\bpolar bear\b/i],
+    ['grizzly bear', /\bgrizzly bear\b/i],
+    ['mountain lion', /\b(mountain lion|cougar|puma)\b/i],
+    ['lion', /\b(lion|lioness|panthera leo)\b/i],
+    ['tiger', /\b(tiger|panthera tigris)\b/i],
+    ['leopard', /\b(leopard|panthera pardus)\b/i],
+    ['cheetah', /\bcheetah\b/i],
+    ['jaguar', /\bjaguar\b/i],
+    ['lynx', /\blynx\b/i],
+    ['bobcat', /\bbobcat\b/i],
+    ['wolf', /\b(wolf|wolves|canis lupus)\b/i],
+    ['coyote', /\bcoyote\b/i],
+    ['fox', /\b(fox|vulpes)\b/i],
+    ['bear', /\b(bear|grizzly|ursus|polar bear)\b/i],
+    ['elephant', /\belephant\b/i],
+    ['giraffe', /\bgiraffe\b/i],
+    ['zebra', /\bzebra\b/i],
+    ['rhino', /\b(rhino|rhinoceros)\b/i],
+    ['hippo', /\b(hippo|hippopotamus)\b/i],
+    ['bison', /\b(bison|buffalo)\b/i],
+    ['moose', /\bmoose\b/i],
+    ['elk', /\belk\b/i],
+    ['deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
+    ['antelope', /\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+    ['kangaroo', /\bkangaroo\b/i],
+    ['koala', /\bkoala\b/i],
+    ['otter', /\botter\b/i],
+    ['rabbit', /\b(rabbit|hare)\b/i],
+    ['squirrel', /\b(squirrel|chipmunk|marmot)\b/i],
+    ['gorilla', /\bgorilla\b/i],
+    ['chimpanzee', /\bchimpanzee\b/i],
+    ['orangutan', /\borangutan\b/i],
+    ['monkey', /\b(monkey|macaque|baboon|gibbon|lemur)\b/i],
+    ['hyena', /\b(hyena|hyaena)\b/i],
+    ['meerkat', /\bmeerkat\b/i],
+    ['crocodile', /\bcrocodile\b/i],
+    ['alligator', /\balligator\b/i],
+    ['turtle', /\b(turtle|tortoise)\b/i],
+    ['snake', /\b(snake|python|cobra|rattlesnake|boa)\b/i],
+    ['eagle', /\beagle\b/i],
+    ['hawk', /\bhawk\b/i],
+    ['falcon', /\bfalcon\b/i],
+    ['owl', /\bowl\b/i],
+    ['penguin', /\bpenguin\b/i],
+    ['shark', /\bshark\b/i],
+    ['whale', /\b(whale|orca)\b/i],
+    ['dolphin', /\bdolphin\b/i],
+    ['seal', /\b(seal|sea lion|walrus)\b/i],
+    ['frog', /\b(frog|toad)\b/i]
+  ];
+
+  const ACTIONS = [
+    ['Drinking', /\b(drink|drinking|waterhole|watering|water hole)\b/i],
+    ['Walking', /\b(walk|walking)\b/i],
+    ['Running', /\b(run|running|sprint|sprinting)\b/i],
+    ['Swimming', /\b(swim|swimming)\b/i],
+    ['Feeding', /\b(feed|feeding|eating|grazing|browsing|foraging)\b/i],
+    ['Resting', /\b(rest|resting|sleeping|relaxing)\b/i],
+    ['Playing', /\b(play|playing)\b/i],
+    ['Climbing', /\b(climb|climbing)\b/i],
+    ['Flying', /\b(fly|flying|soaring)\b/i],
+    ['Hunting', /\b(hunt|hunting|stalking)\b/i],
+    ['Calling', /\b(call|calling|howl|howling|roar|roaring)\b/i],
+    ['Exploring', /\b(explore|exploring|wandering|roaming)\b/i]
+  ];
+
+  const HABITATS = [
+    ['Savanna', /\b(savanna|savannah)\b/i],
+    ['Forest', /\b(forest|woodland|woods)\b/i],
+    ['Wetland', /\b(wetland|marsh|swamp)\b/i],
+    ['Desert', /\b(desert|arid)\b/i],
+    ['Grassland', /\b(grassland|prairie|steppe)\b/i],
+    ['River', /\b(river|stream)\b/i],
+    ['Lake', /\blake\b/i],
+    ['Ocean', /\b(ocean|sea|marine)\b/i],
+    ['Mountains', /\b(mountain|alpine)\b/i],
+    ['Coast', /\b(coast|coastal|shore|beach)\b/i],
+    ['Arctic', /\b(arctic|tundra|ice)\b/i]
+  ];
+
+  function pretty(value = '') {
+    return String(value || '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, ch => ch.toUpperCase());
+  }
+
+  function sourceText(detail = {}) {
+    const top = Array.isArray(detail.sources) ? detail.sources : [];
+    const inner = Array.isArray(detail.source?.sources) ? detail.source.sources : [];
+    return [
+      detail.detectedAnimal,
+      detail.searchTopic,
+      detail.requestedSourceQuery,
+      detail.title,
+      detail.attribution,
+      detail.source?.detectedAnimal,
+      detail.source?.searchTopic,
+      detail.source?.requestedSourceQuery,
+      detail.source?.title,
+      detail.source?.attribution,
+      ...top.map(x => `${x?.detectedAnimal || ''} ${x?.title || ''} ${x?.creator || ''}`),
+      ...inner.map(x => `${x?.detectedAnimal || ''} ${x?.title || ''} ${x?.creator || ''}`)
+    ].filter(Boolean).join(' ');
+  }
+
+  function detectAnimalFromText(text = '') {
+    return ANIMALS.find(([, rx]) => rx.test(String(text || ''))) || null;
+  }
+
+  function detectedAnimal(detail = {}) {
+    const explicit = String(detail.detectedAnimal || detail.source?.detectedAnimal || '').trim();
+    if (explicit && !/^wildlife$/i.test(explicit)) return pretty(explicit);
+    const found = detectAnimalFromText(sourceText(detail));
+    return found ? pretty(found[0]) : 'Wild Animal';
+  }
+
+  function emojiFor(label = '') {
+    const s = label.toLowerCase();
+    if (/bee/.test(s)) return '🐝';
+    if (/butterfly/.test(s)) return '🦋';
+    if (/lion/.test(s) && !/sea lion/.test(s)) return '🦁';
+    if (/tiger/.test(s)) return '🐅';
+    if (/leopard|cheetah|jaguar/.test(s)) return '🐆';
+    if (/wolf|coyote/.test(s)) return '🐺';
+    if (/fox/.test(s)) return '🦊';
+    if (/bear/.test(s)) return '🐻';
+    if (/elephant/.test(s)) return '🐘';
+    if (/giraffe/.test(s)) return '🦒';
+    if (/zebra/.test(s)) return '🦓';
+    if (/moose/.test(s)) return '🫎';
+    if (/deer|elk|reindeer|caribou/.test(s)) return '🦌';
+    if (/crocodile|alligator/.test(s)) return '🐊';
+    if (/eagle/.test(s)) return '🦅';
+    if (/owl/.test(s)) return '🦉';
+    if (/shark/.test(s)) return '🦈';
+    if (/whale/.test(s)) return '🐋';
+    if (/dolphin/.test(s)) return '🐬';
+    if (/seal|sea lion|walrus/.test(s)) return '🦭';
+    if (/turtle|tortoise/.test(s)) return '🐢';
+    if (/frog|toad/.test(s)) return '🐸';
+    if (/rabbit|hare/.test(s)) return '🐇';
+    if (/monkey|gorilla|chimpanzee|orangutan|baboon|macaque|lemur|gibbon/.test(s)) return '🐒';
+    if (/dog|puppy/.test(s)) return '🐶';
+    if (/cat|kitten/.test(s)) return '🐱';
+    if (/fish/.test(s)) return '🐟';
+    return '🌿';
+  }
+
+  function rejectedTitles() {
+    try {
+      const x = JSON.parse(localStorage.getItem(REJECT_KEY) || '[]');
+      return new Set(Array.isArray(x) ? x.map(v => String(v).toLowerCase()) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveRejected(set) {
+    try { localStorage.setItem(REJECT_KEY, JSON.stringify([...set].slice(-300))); } catch {}
+  }
+
+  function rejectFromError(message = '') {
+    const text = String(message || '');
+    const match =
+      text.match(/source validation rejected\s+["“]([^"”]+)["”]/i) ||
+      text.match(/rejected\s+["“]([^"”]+)["”]/i);
+    if (!match?.[1]) return false;
+    const set = rejectedTitles();
+    set.add(match[1].trim().toLowerCase());
+    saveRejected(set);
+    return true;
+  }
+
+  // Immediately remember the source that stopped the previous run, if present.
+  try {
+    const cp = JSON.parse(localStorage.getItem('clipfree_batch_checkpoint_v19') || 'null');
+    if (cp?.lastError) rejectFromError(cp.lastError);
+  } catch {}
+
+  function installSearchRepair() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt?.searchCommonsDownloadable || yt.__clipfreeSourceRepairV23) return Boolean(yt?.__clipfreeSourceRepairV23);
+
+    const original = yt.searchCommonsDownloadable.bind(yt);
+    yt.searchCommonsDownloadable = async function repairedSearch(query, limit = 12) {
+      const wanted = Math.max(1, Number(limit || 12));
+      const results = await original(query, Math.max(wanted, 20));
+      const rejected = rejectedTitles();
+
+      return (results || [])
+        .filter(item => !rejected.has(String(item?.title || '').trim().toLowerCase()))
+        .slice(0, wanted);
+    };
+
+    yt.__clipfreeSourceRepairV23 = true;
+    return true;
+  }
+
+  window.ClipFreeSourceRepairV23 = {
+    version:'23.0',
+    rejectFromError,
+    rejectedTitles:() => [...rejectedTitles()]
+  };
+
+  // Force a fresh current animal-generator module on mobile so an old cached
+  // strict-animal validator cannot keep rejecting species added later.
+  async function refreshAnimalGeneratorModule() {
+    const oldButton = $('generateAnimalVideo');
+    if (!oldButton || oldButton.dataset.clipfreeV23Fresh === '1') return;
+
+    const freshButton = oldButton.cloneNode(true);
+    freshButton.dataset.clipfreeV23Fresh = '1';
+    oldButton.replaceWith(freshButton);
+
+    try {
+      await import('./animal-generator.js?v=20261006-v23-fresh');
+      window.CLIPFREE_ANIMAL_GENERATOR_FRESH_V23 = true;
+    } catch (err) {
+      console.error('Fresh animal-generator import failed', err);
+      // If import fails, restore usability by allowing v19 to report the issue.
+      freshButton.disabled = false;
+    }
+  }
+
+  function installVoiceoverSpeciesGuard() {
+    const voice = window.ClipFreeVoiceover;
+    if (!voice?.generate || voice.__clipfreeActualAnimalV23) return Boolean(voice?.__clipfreeActualAnimalV23);
+
+    const original = voice.generate.bind(voice);
+    voice.generate = async function actualAnimalVoice(options = {}) {
+      const text = [
+        options?.source?.__clipfreeDetectedAnimal,
+        options?.source?.title,
+        options?.source?.creator,
+        options?.customTopic
+      ].filter(Boolean).join(' ');
+      const found = detectAnimalFromText(text);
+
+      if (!found) return original(options);
+
+      const label = pretty(found[0]);
+      return original({
+        ...options,
+        customTopic:label,
+        preset:{
+          ...(options.preset || {}),
+          label,
+          query:found[0]
+        }
+      });
+    };
+
+    voice.__clipfreeActualAnimalV23 = true;
+    return true;
+  }
+
+  function loadTitleHistory() {
+    try {
+      const x = JSON.parse(localStorage.getItem(TITLE_KEY) || '[]');
+      return Array.isArray(x) ? x : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveTitle(title) {
+    try {
+      const old = loadTitleHistory();
+      old.unshift(title);
+      localStorage.setItem(TITLE_KEY, JSON.stringify([...new Set(old)].slice(0,1000)));
+    } catch {}
+  }
+
+  function chooseTitle(detail, label, action, habitat) {
+    const emoji = emojiFor(label);
+    const candidates = [];
+
+    if (action && habitat) {
+      candidates.push(
+        `${label} ${action} in the ${habitat} ${emoji}`,
+        `${label} in Action: ${habitat} Wildlife ${emoji}`
+      );
+    }
+    if (action) candidates.push(`${label} ${action} in the Wild ${emoji}`);
+    if (habitat) candidates.push(`${label} Up Close in the ${habitat} ${emoji}`);
+
+    candidates.push(
+      `${label} Up Close in Nature ${emoji}`,
+      `${label} Wildlife Moment ${emoji}`,
+      `${label} in Its Natural Habitat ${emoji}`,
+      `${label} Nature Encounter ${emoji}`,
+      `${label} A Closer Look ${emoji}`,
+      `${label} Real Wildlife Footage ${emoji}`
+    );
+
+    const used = new Set(loadTitleHistory().map(x => String(x).toLowerCase()));
+    const source = sourceText(detail);
+    let seed = 0;
+    for (let i=0;i<source.length;i++) seed = ((seed * 31) + source.charCodeAt(i)) >>> 0;
+
+    for (let n=0;n<candidates.length;n++) {
+      const title = candidates[(seed + n) % candidates.length]
+        .replace(/\s+/g,' ')
+        .trim()
+        .slice(0,85);
+      if (!used.has(title.toLowerCase())) {
+        saveTitle(title);
+        return title;
+      }
+    }
+
+    const fallback = `${label} Wildlife Encounter ${emoji} ${String(Date.now()).slice(-5)}`.slice(0,85);
+    saveTitle(fallback);
+    return fallback;
+  }
+
+  function hashtags(label) {
+    const species = '#' + label.replace(/[^A-Za-z0-9]+/g,'');
+    return [species || '#Animals', '#Wildlife', '#Shorts'].slice(0,3);
+  }
+
+  function tags(label, action, habitat) {
+    const s = label.toLowerCase();
+    return [...new Set([
+      s,
+      `${s} wildlife`,
+      `${s} video`,
+      action ? `${s} ${action.toLowerCase()}` : '',
+      habitat ? `${s} ${habitat.toLowerCase()}` : '',
+      'wildlife',
+      'wildlife shorts',
+      'animal shorts',
+      'nature'
+    ].filter(Boolean))].slice(0,8);
+  }
+
+  function attribution(detail = {}) {
+    return String(detail.attribution || detail.source?.attribution || '').trim();
+  }
+
+  function finalDescription(detail, label, action, habitat, tagList, hashList) {
+    const first = action && habitat
+      ? `Watch this ${label.toLowerCase()} ${action.toLowerCase()} in the ${habitat.toLowerCase()} — real animal footage in a vertical Short.`
+      : action
+        ? `Watch this ${label.toLowerCase()} ${action.toLowerCase()} in the wild — real animal footage.`
+        : habitat
+          ? `Watch this ${label.toLowerCase()} in the ${habitat.toLowerCase()} — real animal footage.`
+          : `Watch this real ${label.toLowerCase()} animal moment up close.`;
+
+    const sourceTitle = [
+      ...(Array.isArray(detail.sources) ? detail.sources : []),
+      ...(Array.isArray(detail.source?.sources) ? detail.source.sources : [])
+    ].map(x => x?.title).filter(Boolean)[0] || '';
+
+    return [
+      first,
+      `More ${label.toLowerCase()} videos, wildlife encounters and nature Shorts from Wildlife Encounters TV.`,
+      sourceTitle ? `Featured source topic: ${String(sourceTitle).replace(/\.[a-z0-9]{2,5}$/i,'').slice(0,120)}.` : '',
+      `Topics: ${tagList.slice(0,6).join(', ')}.`,
+      hashList.join(' '),
+      attribution(detail) ? `Source / attribution:\n${attribution(detail)}` : ''
+    ].filter(Boolean).join('\n\n').slice(0,5000);
+  }
+
+  function installFinalSeo() {
+    if (window.__clipfreeActualAnimalSeoV23) return true;
+    window.__clipfreeActualAnimalSeoV23 = true;
+
+    // Capture listener runs after upload-speed-boost's capture listener because
+    // compliance-demo is loaded later, but still before youtube.js's bubble listener.
+    window.addEventListener('clipfree-export-ready', event => {
+      const detail = event.detail || {};
+      if (detail.kind !== 'animal-generator') return;
+      if (!detail.__clipfreeGrowthFinalReady) return;
+      if (detail.__clipfreeSeoV23Ready) return;
+
+      const text = sourceText(detail);
+      const found = detectAnimalFromText(text);
+      const label = found ? pretty(found[0]) : detectedAnimal(detail);
+      const action = ACTIONS.find(([,rx]) => rx.test(text))?.[0] || '';
+      const habitat = HABITATS.find(([,rx]) => rx.test(text))?.[0] || '';
+
+      const title = chooseTitle(detail,label,action,habitat);
+      const tagList = tags(label,action,habitat);
+      const hashList = hashtags(label);
+      const description = finalDescription(detail,label,action,habitat,tagList,hashList);
+
+      detail.detectedAnimal = label;
+      detail.title = title;
+      detail.description = description;
+      detail.tags = tagList.join(', ');
+      detail.hashtags = hashList.join(' ');
+      detail.__clipfreeSeoV23Ready = true;
+
+      if ($('uploadTitle')) $('uploadTitle').value = title;
+      if ($('uploadDescription')) $('uploadDescription').value = description;
+      if ($('uploadTags')) $('uploadTags').value = detail.tags;
+      if ($('seoTitle')) $('seoTitle').value = title;
+      if ($('seoDescription')) $('seoDescription').value = description;
+      if ($('seoTags')) $('seoTags').value = detail.tags;
+      if ($('seoHashtags')) $('seoHashtags').value = detail.hashtags;
+
+      if (window.ClipFreeExport === detail) {
+        window.ClipFreeExport.title = title;
+        window.ClipFreeExport.description = description;
+        window.ClipFreeExport.tags = detail.tags;
+        window.ClipFreeExport.hashtags = detail.hashtags;
+        window.ClipFreeExport.detectedAnimal = label;
+      }
+    }, true);
+
+    return true;
+  }
+
+  function addStatusCard() {
+    if ($('clipfreeV23Status')) return true;
+    const head = $('clipfreeSimpleStudio')?.querySelector('.simple-head');
+    if (!head) return false;
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeV23Status';
+    card.style.cssText = 'margin:12px 0;padding:11px 13px;border:1px solid #2f6948;border-radius:13px;background:#0d1711;color:#a6f3bf;font-size:.74rem;font-weight:800;line-height:1.45';
+    card.textContent = '✓ v23 SELF-HEAL ON • ACTUAL-ANIMAL SEO • source mismatches auto-retry • species narration';
+    head.appendChild(card);
+    return true;
+  }
+
+  async function install() {
+    installSearchRepair();
+    installVoiceoverSpeciesGuard();
+    installFinalSeo();
+    addStatusCard();
+  }
+
+  install();
+  refreshAnimalGeneratorModule();
+
+  const timer = setInterval(() => {
+    install();
+    if (window.CLIPFREE_ANIMAL_GENERATOR_FRESH_V23 && installSearchRepair() && installVoiceoverSpeciesGuard()) {
+      clearInterval(timer);
+    }
+  },200);
+  setTimeout(() => clearInterval(timer),30000);
+
+  window.addEventListener('clipfree-youtube-ready', () => setTimeout(install,0));
+
+  window.CLIPFREE_V23 = {
+    version:'23.0',
+    sourceSelfHeal:true,
+    actualAnimalSeo:true,
+    actualAnimalNarration:true,
+    freshAnimalGenerator:true
+  };
 })();
