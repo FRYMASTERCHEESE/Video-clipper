@@ -906,10 +906,10 @@
 })();
 
 
-/* CLIPFREE 1-20 SEQUENTIAL + AUTO-RETRY v15 */
+/* CLIPFREE 1-10 SEQUENTIAL + AUTO-RETRY v15 */
 /*
   Final mobile batch runner:
-  - handles EVERY multi-Short request (2–20), including 8
+  - handles EVERY multi-Short request (2–10), including 8
   - creates/uploads one Short at a time
   - requires a real YouTube video ID before moving to the next Short
   - automatically retries the SAME slot when Motion Guard blocks a still source
@@ -1076,7 +1076,7 @@
     if (running) return;
     running = true;
 
-    const requested = Math.max(2, Math.min(20, Number(total || 2)));
+    const requested = Math.max(2, Math.min(10, Number(total || 2)));
     const visibleButton = $('simpleStart');
     const generatorButton = $('generateAnimalVideo');
 
@@ -1196,7 +1196,7 @@
     const target = event.target?.closest?.('#simpleStart');
     if (!target) return;
 
-    const requested = Math.max(1, Math.min(20, Number($('simpleCount')?.value || 1)));
+    const requested = Math.max(1, Math.min(10, Number($('simpleCount')?.value || 1)));
     if (requested <= 1) return;
 
     event.preventDefault();
@@ -1206,7 +1206,7 @@
 
   window.ClipFreeSequentialBatch = {
     version:'15.0',
-    max:20,
+    max:10,
     run: runBatch,
     active: () => running
   };
@@ -1908,7 +1908,7 @@
 /* CLIPFREE KEEP-AWAKE + RESUME v19 */
 /*
   Mobile reliability:
-  - requests a screen wake lock while a 2–20 Short batch is running
+  - requests a screen wake lock while a 2–10 Short batch is running
   - saves progress after every real YouTube video ID
   - shows Resume Remaining after an interruption/reload
   - keeps the existing v18 source/encoder speed improvements
@@ -1919,7 +1919,7 @@
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const KEY = 'clipfree_batch_checkpoint_v19';
-  const MAX_SOURCE_RETRIES = 8;
+  const MAX_SOURCE_RETRIES = 5;
 
   let running = false;
   let wakeLock = null;
@@ -1980,6 +1980,35 @@
     );
   }
 
+  async function waitForRealUploadEvidence(beforeCount, beforeVideoId = '', timeoutMs = 12000) {
+    const started = Date.now();
+
+    while (Date.now() - started < timeoutMs) {
+      const count = transferredCount();
+      const latestId = String(
+        window.ClipFreeLastUpload?.videoId ||
+        window.ClipFreeTransferredUploadState?.lastVideoId ||
+        ''
+      ).trim();
+
+      if (count > beforeCount) {
+        return {ok:true, count, videoId:latestId};
+      }
+
+      if (latestId && latestId !== String(beforeVideoId || '')) {
+        return {ok:true, count, videoId:latestId};
+      }
+
+      await sleep(300);
+    }
+
+    return {
+      ok:false,
+      count:transferredCount(),
+      videoId:String(window.ClipFreeLastUpload?.videoId || '').trim()
+    };
+  }
+
   function exactFailure() {
     const values = [
       $('animalGeneratorStatus')?.textContent,
@@ -2004,7 +2033,9 @@
       m.includes('no suitable') ||
       m.includes('different unused') ||
       m.includes('source validation rejected') ||
-      m.includes('metadata does not identify the requested animal')
+      m.includes('metadata does not identify the requested animal') ||
+      m.includes('no youtube video id') ||
+      m.includes('did not return a video id')
     );
   }
 
@@ -2187,7 +2218,7 @@
   async function runBatch(total, resumeCheckpoint = null) {
     if (running) return;
 
-    const requested = Math.max(2, Math.min(20, Number(total || 2)));
+    const requested = Math.max(2, Math.min(10, Number(total || 2)));
     const startButton = $('simpleStart');
     const generator = $('generateAnimalVideo');
 
@@ -2234,6 +2265,7 @@
           }
 
           const before = transferredCount();
+          const beforeVideoId = String(window.ClipFreeLastUpload?.videoId || '').trim();
 
           setStatus(
             `Short ${completed + 1}/${requested}: fast real-video source` +
@@ -2244,9 +2276,13 @@
           generator.click();
           await waitForCycle(generator);
 
-          const after = transferredCount();
+          // youtube.js can return the generator button to idle a moment before
+          // the upload event/state is visible to the outer batch runner.
+          // Wait briefly for a REAL YouTube ID before declaring failure.
+          const transfer = await waitForRealUploadEvidence(before, beforeVideoId, 12000);
+          const after = transfer.count;
 
-          if (after > before) {
+          if (transfer.ok) {
             completed += 1;
             success = true;
 
@@ -2318,7 +2354,7 @@
     const resume = event.target?.closest?.('#clipfreeResumeBatch');
 
     if (start) {
-      const requested = Math.max(1, Math.min(20, Number($('simpleCount')?.value || 1)));
+      const requested = Math.max(1, Math.min(10, Number($('simpleCount')?.value || 1)));
       if (requested <= 1) return;
 
       event.preventDefault();
@@ -3859,7 +3895,7 @@
     searching the exact same slice of wildlife queries
   - search results are filtered against the requested animal BEFORE animal-generator sees them
   - stale red source-validation messages are cleared before each new generator attempt
-  - up to 8 source retries happen inside the saved 2–20 batch runner
+  - up to 8 source retries happen inside the saved 2–10 batch runner
   - v23 actual-animal SEO/narration, v22 providers, v21 real allowance,
     v20 quality turbo, v19 resume/wake-lock and v18 speed remain intact
 */
@@ -4281,7 +4317,7 @@
     const btn = $('simpleStart');
     if (!btn) return false;
 
-    const count = Math.max(1, Math.min(20, Number($('simpleCount')?.value || 1)));
+    const count = Math.max(1, Math.min(10, Number($('simpleCount')?.value || 1)));
     if (!btn.disabled) {
       btn.textContent = `🚀 CREATE + SEO + UPLOAD ${count} SHORT${count === 1 ? '' : 'S'} NOW`;
     }
@@ -4795,5 +4831,152 @@
     voiceGenerationTimeoutMs:VOICE_TIMEOUT_MS,
     liveProgressMirror:true,
     evidenceIsRealOnly:true
+  };
+})();
+
+/* CLIPFREE MOBILE 10-SHORT STABILITY v28 */
+/*
+  Mobile reliability policy:
+  - maximum batch size is now 10
+  - options 11–20 are removed from the normal UI
+  - an old 20-Short resume checkpoint is safely clamped to 10
+    without erasing already-completed uploads
+  - no-ID race gets a real-ID grace window in the v19 runner
+  - reviewer/audit pages remain unchanged and fully available
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const MAX_BATCH = 10;
+  const CHECKPOINT_KEY = 'clipfree_batch_checkpoint_v19';
+
+  function migrateCheckpoint() {
+    try {
+      const raw = localStorage.getItem(CHECKPOINT_KEY);
+      if (!raw) return;
+
+      const cp = JSON.parse(raw);
+      if (!cp || typeof cp !== 'object') return;
+
+      const oldRequested = Math.max(0, Number(cp.requested || 0));
+      const oldCompleted = Math.max(0, Number(cp.completed || 0));
+
+      if (oldRequested > MAX_BATCH) {
+        cp.requested = MAX_BATCH;
+        cp.completed = Math.min(oldCompleted, MAX_BATCH);
+        cp.active = cp.completed < MAX_BATCH;
+        cp.lastError = '';
+        cp.updatedAt = new Date().toISOString();
+        cp.v28ClampedFrom = oldRequested;
+        localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(cp));
+      }
+    } catch (err) {
+      console.warn('v28 checkpoint migration skipped', err);
+    }
+  }
+
+  function readCheckpoint() {
+    try {
+      const cp = JSON.parse(localStorage.getItem(CHECKPOINT_KEY) || 'null');
+      return cp && typeof cp === 'object' ? cp : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function capCountUi() {
+    const count = $('simpleCount');
+    if (!count) return false;
+
+    if (count.tagName === 'SELECT') {
+      [...count.options].forEach(option => {
+        const n = Number(option.value);
+        if (Number.isFinite(n) && n > MAX_BATCH) option.remove();
+      });
+    }
+
+    const current = Number(count.value || 1);
+    if (!Number.isFinite(current) || current > MAX_BATCH) {
+      count.value = String(MAX_BATCH);
+      count.dispatchEvent(new Event('input', {bubbles:true}));
+      count.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+
+    // Some versions use a numeric input instead of a select.
+    try { count.max = String(MAX_BATCH); } catch {}
+
+    return true;
+  }
+
+  function refreshButtons() {
+    const count = Math.max(1, Math.min(MAX_BATCH, Number($('simpleCount')?.value || 1)));
+    const start = $('simpleStart');
+
+    if (start && !start.disabled) {
+      start.textContent = `🚀 CREATE + SEO + UPLOAD ${count} SHORT${count === 1 ? '' : 'S'} NOW`;
+    }
+
+    const cp = readCheckpoint();
+    const resume = $('clipfreeResumeBatch');
+    if (resume && cp?.active) {
+      const requested = Math.min(MAX_BATCH, Math.max(0, Number(cp.requested || MAX_BATCH)));
+      const completed = Math.min(requested, Math.max(0, Number(cp.completed || 0)));
+      const remaining = Math.max(0, requested - completed);
+
+      if (remaining > 0) {
+        resume.textContent = `▶ RESUME ${remaining} REMAINING SHORT${remaining === 1 ? '' : 'S'}`;
+      } else {
+        resume.remove();
+      }
+    }
+  }
+
+  function addBadge() {
+    if ($('clipfreeV28Status')) return true;
+    const head = $('clipfreeSimpleStudio')?.querySelector('.simple-head');
+    if (!head) return false;
+
+    const el = document.createElement('div');
+    el.id = 'clipfreeV28Status';
+    el.style.cssText =
+      'margin:12px 0;padding:11px 13px;border:1px solid #2d6a49;border-radius:13px;' +
+      'background:#0c1711;color:#adf2c4;font-size:.76rem;font-weight:900;line-height:1.45';
+    el.textContent =
+      '✓ v28 MOBILE STABILITY • max 10 Shorts • real-ID grace check • resume protected • reviewer evidence untouched';
+
+    head.appendChild(el);
+    return true;
+  }
+
+  function install() {
+    migrateCheckpoint();
+    capCountUi();
+    refreshButtons();
+    addBadge();
+  }
+
+  install();
+
+  const timer = setInterval(() => {
+    install();
+    if (capCountUi() && $('clipfreeV28Status')) clearInterval(timer);
+  }, 150);
+  setTimeout(() => clearInterval(timer), 30000);
+
+  $('simpleCount')?.addEventListener('change', () => {
+    capCountUi();
+    refreshButtons();
+  });
+
+  window.addEventListener('pageshow', install);
+  window.addEventListener('clipfree-youtube-state', () => setTimeout(install, 0));
+
+  window.CLIPFREE_V28 = {
+    version:'28.0',
+    maxBatch:MAX_BATCH,
+    noIdGraceMs:12000,
+    oldCheckpointMigration:true,
+    reviewerFlowChanged:false
   };
 })();

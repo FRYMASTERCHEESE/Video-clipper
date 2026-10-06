@@ -1,0 +1,33 @@
+ClipFree v28 — MOBILE 10-SHORT STABILITY
+
+REPLACE ONLY:
+  compliance-demo-v11.js
+
+WHAT CHANGED
+- Maximum batch is now 10 Shorts.
+- Options 11 through 20 are removed from the normal ClipFree UI.
+- Your existing 20-Short checkpoint is NOT deleted:
+    if 1/20 was completed, v28 converts it to 1/10,
+    so Resume should show 9 remaining.
+- If the generator finishes before the YouTube upload event reaches the outer
+  batch runner, v28 waits up to 12 seconds for the REAL YouTube video ID.
+- "No YouTube video ID" is retryable when there is no hard OAuth/quota/API error.
+- Source retries reduced from 8 to 5 for faster mobile recovery.
+- Existing source, motion, duplicate, SEO, quality, wake-lock and resume protections remain.
+
+YOUTUBE COMPLIANCE REVIEW
+The reviewer/audit flow is NOT changed in v28.
+Keep these working:
+  https://coreyvibe.org/?audit=1
+  https://coreyvibe.org/?compliance=1
+  https://coreyvibe.org/?review=1
+
+NORMAL UPLOAD:
+  https://coreyvibe.org/
+
+AFTER UPLOAD
+1. Replace compliance-demo-v11.js on main.
+2. Wait 1–2 minutes.
+3. Fully close old ClipFree tabs and reopen the normal site.
+4. Your old 20-Short resume checkpoint should become a maximum 10-Short job.
+5. Because your screenshot showed 1 already completed, Resume should become 9 remaining.
