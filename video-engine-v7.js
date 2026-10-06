@@ -35,25 +35,35 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     }
 
     const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+    const strongMobile = mobile && memory >= 6 && cores >= 6;
+
+    if (strongMobile) {
+      return {
+        width:1080, height:1920, fps:30, crf:21, preset:'superfast',
+        maxrate:'4000k', bufsize:'8000k', audioBitrate:'160k',
+        label:'1080p Mobile Recommendation HQ'
+      };
+    }
+
     if (mobile) {
       return {
-        width:720, height:1280, fps:30, crf:22, preset:'superfast',
-        maxrate:'2200k', bufsize:'4400k', audioBitrate:'128k',
-        label:'720p HD Quality Turbo'
+        width:720, height:1280, fps:30, crf:20, preset:'superfast',
+        maxrate:'2800k', bufsize:'5600k', audioBitrate:'128k',
+        label:'720p Mobile Recommendation HQ'
       };
     }
 
     const high = memory >= 8 && cores >= 8;
     return high
       ? {
-          width:1080, height:1920, fps:30, crf:22, preset:'superfast',
-          maxrate:'3500k', bufsize:'7000k', audioBitrate:'128k',
-          label:'1080p HQ Upload Turbo'
+          width:1080, height:1920, fps:30, crf:20, preset:'superfast',
+          maxrate:'4500k', bufsize:'9000k', audioBitrate:'160k',
+          label:'1080p Recommendation HQ'
         }
       : {
-          width:720, height:1280, fps:30, crf:22, preset:'superfast',
-          maxrate:'2200k', bufsize:'4400k', audioBitrate:'128k',
-          label:'720p HD Quality Turbo'
+          width:720, height:1280, fps:30, crf:20, preset:'superfast',
+          maxrate:'2800k', bufsize:'5600k', audioBitrate:'128k',
+          label:'720p Recommendation HQ'
         };
   }
 
@@ -138,7 +148,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     await ff.writeFile(audioName, await fetchFile(audioFile));
 
     const vf = [
-      `scale=${profile.width}:${profile.height}:force_original_aspect_ratio=increase`,
+      `scale=${profile.width}:${profile.height}:force_original_aspect_ratio=increase:flags=bicubic`,
       `crop=${profile.width}:${profile.height}`,
       `fps=${profile.fps}`,
       'setsar=1'
@@ -168,6 +178,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
       '-bf', '2',
       '-g', String(profile.fps * 2),
       '-sc_threshold', '0',
+      '-threads', '0',
 
       '-color_primaries', 'bt709',
       '-color_trc', 'bt709',
@@ -270,7 +281,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     a.__clipfreeSpeedQualityV7 = true;
     window.CLIPFREE_VIDEO_ENGINE_V7 = {
       enabled:true,
-      version:'7.3-quality-upload-turbo-v20',
+      version:'7.4-recommendation-quality-v26',
       profile:deviceProfile(),
       singlePass:true
     };

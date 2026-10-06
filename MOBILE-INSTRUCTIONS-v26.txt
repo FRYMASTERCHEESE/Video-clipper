@@ -1,0 +1,51 @@
+ClipFree v26 — YOUTUBE RECOMMENDATION + QUALITY PROFILE
+
+UPLOAD/REPLACE TWO FILES:
+1. compliance-demo-v11.js
+2. video-engine-v7.js
+
+WHAT v26 IMPROVES
+
+YOUTUBE SHORTS GROWTH PROFILE
+- Direct PUBLIC upload mode from v25 stays on.
+- New default duration: 24 seconds (only applied once; you can change it later).
+- Stronger first-caption hook.
+- Actual animal/species remains the SEO focus.
+- 3 focused hashtags only.
+- Up to 8 relevant tags remain.
+- Captions are regenerated around the actual animal.
+- Pets & Animals category (15).
+- Existing duplicate/still/wrong-animal protections stay on.
+- Existing quality/upload/resume/source fixes stay on.
+
+VIDEO QUALITY
+- Strong phones (>=6 GB reported device memory + >=6 CPU threads):
+  1080x1920, 30 fps, H.264 CRF 21, up to ~4 Mbps, AAC 160 kbps.
+- Other phones:
+  720x1280, 30 fps, H.264 CRF 20, up to ~2.8 Mbps, AAC 128 kbps.
+- Desktop/high-capacity:
+  1080x1920, CRF 20, up to ~4.5 Mbps.
+- Bicubic scale/crop, yuv420p, BT.709, H.264 High Profile, Fast Start MP4.
+- No 60 fps inflation: 30 fps keeps quality high without doubling upload size.
+
+vidIQ FREE
+- The connected vidIQ account already has 3 wildlife competitors being tracked.
+- v26 labels the workflow as vidIQ Free competitor tracking.
+- ClipFree does NOT secretly use paid vidIQ credits.
+- Full vidIQ keyword/outlier/trending research costs vidIQ credits, so it is not called automatically.
+
+IMPORTANT
+No code, SEO tool, vidIQ plan or metadata can force YouTube to recommend a Short
+or guarantee millions of views/subscribers. v26 optimizes the controllable signals;
+YouTube still ranks using real viewer response, retention, satisfaction,
+personalization, topic demand and competition.
+
+After upload:
+1. Commit both files to main.
+2. Wait 1–2 minutes.
+3. Fully close old coreyvibe.org tabs.
+4. Open https://coreyvibe.org/
+5. Look for "YOUTUBE RECOMMENDATION PROFILE v26".
+6. Connect YouTube if needed.
+7. Tick rights.
+8. Start with 4–8 high-quality Shorts, then increase after checking retention/results.
