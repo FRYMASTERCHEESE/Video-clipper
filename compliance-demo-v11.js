@@ -2425,3 +2425,463 @@
     optimization:'throttled mobile upload UI overhead'
   };
 })();
+
+/* CLIPFREE REAL DAILY UPLOAD ALLOWANCE v21 */
+/*
+  Truthful upload allowance panel.
+
+  YouTube currently gives the videos.insert method its own default bucket of
+  100 calls/day. Separately, a channel can hit YouTube's platform-level
+  uploadLimitExceeded restriction. YouTube does NOT expose a "remaining channel
+  uploads" number through the Data API.
+
+  This panel therefore NEVER invents that hidden number. It shows:
+  - the official default videos.insert bucket: 100/day
+  - REAL videos uploaded to the connected channel today, fetched from YouTube
+  - REAL ClipFree videos.insert calls observed by this browser today
+  - REAL successful video IDs observed by ClipFree
+  - whether YouTube has actually returned uploadLimitExceeded or quotaExceeded
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const STORE = 'clipfree_real_upload_allowance_v21';
+  const DEFAULT_VIDEO_INSERT_LIMIT = 100;
+  const TZ = 'America/Los_Angeles';
+
+  let capturedToken = '';
+  let refreshBusy = false;
+
+  function ptParts(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ,
+      year:'numeric', month:'2-digit', day:'2-digit'
+    }).formatToParts(date);
+    const get = type => parts.find(p => p.type === type)?.value || '';
+    return {year:get('year'), month:get('month'), day:get('day')};
+  }
+
+  function ptDayKey(date = new Date()) {
+    const p = ptParts(date);
+    return `${p.year}-${p.month}-${p.day}`;
+  }
+
+  function freshState() {
+    return {
+      dayKey:ptDayKey(),
+      attempts:0,
+      successfulIds:[],
+      failedCalls:0,
+      channelLimitHit:false,
+      projectQuotaHit:false,
+      lastError:'',
+      channelUploadsToday:null,
+      channelTitle:'',
+      lastRealRefresh:'',
+      updatedAt:new Date().toISOString()
+    };
+  }
+
+  function loadState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+      if (!saved || saved.dayKey !== ptDayKey()) {
+        const next = freshState();
+        localStorage.setItem(STORE, JSON.stringify(next));
+        return next;
+      }
+      return {
+        ...freshState(),
+        ...saved,
+        successfulIds:Array.isArray(saved.successfulIds) ? saved.successfulIds : []
+      };
+    } catch {
+      return freshState();
+    }
+  }
+
+  function saveState(next) {
+    const state = {
+      ...loadState(),
+      ...next,
+      dayKey:ptDayKey(),
+      updatedAt:new Date().toISOString()
+    };
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch {}
+    render();
+    return state;
+  }
+
+  function extractBearer(headers) {
+    try {
+      const h = new Headers(headers || {});
+      const value = h.get('Authorization') || h.get('authorization') || '';
+      const match = value.match(/^Bearer\s+(.+)$/i);
+      return match?.[1] || '';
+    } catch {
+      if (headers && typeof headers === 'object') {
+        const value = headers.Authorization || headers.authorization || '';
+        const match = String(value).match(/^Bearer\s+(.+)$/i);
+        return match?.[1] || '';
+      }
+      return '';
+    }
+  }
+
+  // Capture the already-authorized YouTube token from normal ClipFree API calls.
+  // It stays in page memory only; v21 never writes it to localStorage.
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async function(input, init = {}) {
+    const token = extractBearer(init?.headers);
+    if (token) capturedToken = token;
+    return nativeFetch(input, init);
+  };
+
+  // Capture Authorization from the XHR video-upload path too.
+  const XHR = window.XMLHttpRequest;
+  if (XHR?.prototype) {
+    const oldSetHeader = XHR.prototype.setRequestHeader;
+    const oldSend = XHR.prototype.send;
+
+    XHR.prototype.setRequestHeader = function(name, value) {
+      if (/^authorization$/i.test(String(name || ''))) {
+        const match = String(value || '').match(/^Bearer\s+(.+)$/i);
+        if (match?.[1]) capturedToken = match[1];
+      }
+      return oldSetHeader.call(this, name, value);
+    };
+
+    XHR.prototype.send = function(body) {
+      if (this.__clipfreeYoutubeVideoUpload && !this.__clipfreeAllowanceCounted) {
+        this.__clipfreeAllowanceCounted = true;
+
+        const s = loadState();
+        saveState({attempts:Number(s.attempts || 0) + 1});
+
+        this.addEventListener('loadend', () => {
+          if (this.status >= 200 && this.status < 300) return;
+
+          let data = {};
+          try { data = JSON.parse(this.responseText || '{}'); } catch {}
+
+          const reason = String(
+            data?.error?.errors?.[0]?.reason ||
+            data?.error?.status ||
+            ''
+          );
+          const message = String(
+            data?.error?.message ||
+            this.statusText ||
+            'YouTube upload request failed.'
+          );
+
+          const current = loadState();
+          const patch = {
+            failedCalls:Number(current.failedCalls || 0) + 1,
+            lastError:reason ? `${reason}: ${message}` : message
+          };
+
+          if (/uploadLimitExceeded/i.test(reason) || /upload limit/i.test(message)) {
+            patch.channelLimitHit = true;
+          }
+
+          if (
+            /quotaExceeded|dailyLimitExceeded/i.test(reason) ||
+            /quota.*exceed|daily quota/i.test(message)
+          ) {
+            patch.projectQuotaHit = true;
+          }
+
+          saveState(patch);
+        }, {once:true});
+      }
+
+      return oldSend.call(this, body);
+    };
+  }
+
+  window.addEventListener('clipfree-youtube-upload-transferred', event => {
+    const id = String(event.detail?.videoId || '').trim();
+    if (!id) return;
+
+    const s = loadState();
+    const ids = new Set(s.successfulIds || []);
+    ids.add(id);
+
+    saveState({
+      successfulIds:[...ids],
+      lastError:''
+    });
+
+    // Refresh the real channel count shortly after YouTube receives the video.
+    setTimeout(() => refreshRealCount(false), 2500);
+  });
+
+  function esc(value='') {
+    return String(value).replace(/[&<>"']/g, ch => (
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]
+    ));
+  }
+
+  async function api(url) {
+    if (!capturedToken) {
+      throw new Error('Connect/Refresh YouTube first so ClipFree has an authorized YouTube session.');
+    }
+
+    const response = await nativeFetch(url, {
+      headers:{Authorization:`Bearer ${capturedToken}`}
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || `YouTube request failed (${response.status}).`);
+    }
+    return data;
+  }
+
+  async function fetchRealUploadsToday() {
+    const channelsUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+    channelsUrl.searchParams.set('part', 'snippet,contentDetails');
+    channelsUrl.searchParams.set('mine', 'true');
+
+    const channelData = await api(channelsUrl.toString());
+    const channel = channelData.items?.[0];
+    if (!channel) throw new Error('No YouTube channel was found for the connected account.');
+
+    const uploadsId = channel.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsId) throw new Error('YouTube did not return the channel uploads playlist.');
+
+    const ids = [];
+    let pageToken = '';
+
+    // 100 is enough to cover the official default videos.insert daily bucket.
+    while (ids.length < 100) {
+      const u = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+      u.searchParams.set('part', 'contentDetails');
+      u.searchParams.set('playlistId', uploadsId);
+      u.searchParams.set('maxResults', String(Math.min(50, 100 - ids.length)));
+      if (pageToken) u.searchParams.set('pageToken', pageToken);
+
+      const page = await api(u.toString());
+
+      for (const item of page.items || []) {
+        if (item.contentDetails?.videoId) ids.push(item.contentDetails.videoId);
+      }
+
+      pageToken = page.nextPageToken || '';
+      if (!pageToken) break;
+    }
+
+    const videos = [];
+    for (let i = 0; i < ids.length; i += 50) {
+      const u = new URL('https://www.googleapis.com/youtube/v3/videos');
+      u.searchParams.set('part', 'snippet,status');
+      u.searchParams.set('id', ids.slice(i, i + 50).join(','));
+      u.searchParams.set('maxResults', '50');
+      const page = await api(u.toString());
+      videos.push(...(page.items || []));
+    }
+
+    const today = ptDayKey();
+    const todayVideos = videos.filter(video => {
+      const publishedAt = video?.snippet?.publishedAt;
+      if (!publishedAt) return false;
+      const d = new Date(publishedAt);
+      return Number.isFinite(d.getTime()) && ptDayKey(d) === today;
+    });
+
+    return {
+      channelTitle:channel.snippet?.title || '',
+      count:todayVideos.length,
+      ids:todayVideos.map(v => v.id).filter(Boolean)
+    };
+  }
+
+  async function refreshRealCount(showMessage = true) {
+    if (refreshBusy) return;
+    refreshBusy = true;
+
+    const btn = $('realUploadAllowanceRefresh');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Checking YouTube…';
+    }
+
+    try {
+      // Calling ClipFree's normal refresh first gives us a fresh token-bearing
+      // fetch request if the connected session is active.
+      if (!capturedToken && window.ClipFreeYouTube?.refreshAllChannelData) {
+        await window.ClipFreeYouTube.refreshAllChannelData();
+      }
+
+      const real = await fetchRealUploadsToday();
+      const s = loadState();
+      const allKnownIds = new Set([...(s.successfulIds || []), ...real.ids]);
+
+      saveState({
+        successfulIds:[...allKnownIds],
+        channelUploadsToday:real.count,
+        channelTitle:real.channelTitle,
+        lastRealRefresh:new Date().toISOString()
+      });
+    } catch (err) {
+      if (showMessage) {
+        saveState({lastError:err?.message || String(err)});
+      }
+    } finally {
+      refreshBusy = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '↻ Refresh real count';
+      }
+      render();
+    }
+  }
+
+  function addStyles() {
+    if ($('realUploadAllowanceStyles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'realUploadAllowanceStyles';
+    style.textContent = `
+      #realUploadAllowanceCard{
+        margin:14px 0;padding:15px;border:1px solid #315a46;border-radius:16px;
+        background:linear-gradient(145deg,#101a15,#0d1110);color:#f5fff8
+      }
+      #realUploadAllowanceCard h3{margin:0 0 5px;font-size:1rem}
+      #realUploadAllowanceCard .quota-sub{margin:0 0 12px;color:#aebdb4;font-size:.76rem;line-height:1.45}
+      .quota-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      .quota-box{padding:10px;border:1px solid #263b30;border-radius:11px;background:#0b100d}
+      .quota-box small{display:block;color:#95a99b;font-size:.66rem;margin-bottom:3px}
+      .quota-box strong{font-size:1.05rem}
+      .quota-wide{grid-column:1/-1}
+      #realUploadAllowanceRefresh{
+        width:100%;margin-top:10px;min-height:44px;border:0;border-radius:11px;
+        background:#166534;color:#fff;font:inherit;font-weight:900
+      }
+      .quota-good{color:#9ae6b4}.quota-warn{color:#ffd18b}.quota-bad{color:#ff9d9d}
+      .quota-note{margin-top:10px;color:#9d9aaa;font-size:.69rem;line-height:1.45}
+      @media(max-width:480px){.quota-grid{grid-template-columns:1fr 1fr}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function buildCard() {
+    if ($('realUploadAllowanceCard')) return true;
+
+    const studio = $('clipfreeSimpleStudio');
+    const head = studio?.querySelector('.simple-head');
+    if (!head) return false;
+
+    addStyles();
+
+    const card = document.createElement('div');
+    card.id = 'realUploadAllowanceCard';
+    card.innerHTML = `
+      <h3>📤 Real Daily Upload Allowance</h3>
+      <p class="quota-sub">
+        Real YouTube channel count + real ClipFree API calls. No guessed hidden channel limit.
+      </p>
+      <div class="quota-grid">
+        <div class="quota-box">
+          <small>Official videos.insert bucket</small>
+          <strong data-quota-official>100/day</strong>
+        </div>
+        <div class="quota-box">
+          <small>Channel uploads today</small>
+          <strong data-quota-channel>—</strong>
+        </div>
+        <div class="quota-box">
+          <small>ClipFree API calls today</small>
+          <strong data-quota-attempts>0</strong>
+        </div>
+        <div class="quota-box">
+          <small>Tracked API calls left</small>
+          <strong data-quota-left>100</strong>
+        </div>
+        <div class="quota-box quota-wide">
+          <small>Actual YouTube channel-limit status</small>
+          <strong data-quota-channel-status>Not checked yet</strong>
+        </div>
+      </div>
+      <button id="realUploadAllowanceRefresh" type="button">↻ Refresh real count</button>
+      <div class="quota-note" data-quota-note></div>
+    `;
+
+    const analytics = $('mobileYoutubeAnalyticsCard');
+    if (analytics?.parentNode === head) {
+      analytics.insertAdjacentElement('afterend', card);
+    } else {
+      head.appendChild(card);
+    }
+
+    $('realUploadAllowanceRefresh')?.addEventListener('click', () => refreshRealCount(true));
+    render();
+    return true;
+  }
+
+  function render() {
+    const card = $('realUploadAllowanceCard');
+    if (!card) return;
+
+    const s = loadState();
+    const attempts = Math.max(0, Number(s.attempts || 0));
+    const left = s.projectQuotaHit ? 0 : Math.max(0, DEFAULT_VIDEO_INSERT_LIMIT - attempts);
+
+    card.querySelector('[data-quota-official]').textContent = `${DEFAULT_VIDEO_INSERT_LIMIT}/day`;
+    card.querySelector('[data-quota-channel]').textContent =
+      s.channelUploadsToday === null ? 'Tap Refresh' : String(s.channelUploadsToday);
+    card.querySelector('[data-quota-attempts]').textContent = String(attempts);
+    card.querySelector('[data-quota-left]').textContent = String(left);
+
+    const status = card.querySelector('[data-quota-channel-status]');
+    if (s.channelLimitHit) {
+      status.textContent = '0 remaining — YouTube returned uploadLimitExceeded';
+      status.className = 'quota-bad';
+    } else if (s.projectQuotaHit) {
+      status.textContent = 'Project upload quota reached';
+      status.className = 'quota-bad';
+    } else {
+      status.textContent = 'No channel upload-limit error received';
+      status.className = 'quota-good';
+    }
+
+    const note = card.querySelector('[data-quota-note]');
+    const channelText = s.channelTitle ? `Connected channel: ${s.channelTitle}. ` : '';
+    const refreshText = s.lastRealRefresh
+      ? `Real channel count refreshed ${new Date(s.lastRealRefresh).toLocaleString()}. `
+      : '';
+
+    note.innerHTML =
+      `${esc(channelText)}${esc(refreshText)}` +
+      `YouTube resets API daily quota at midnight Pacific Time. ` +
+      `<strong>YouTube does not expose the channel's hidden remaining daily-upload count through the API</strong>, ` +
+      `so ClipFree will not invent one. If YouTube returns uploadLimitExceeded, this card changes to 0 immediately.` +
+      (s.lastError ? `<br><span class="quota-warn">${esc(s.lastError)}</span>` : '');
+  }
+
+  const timer = setInterval(() => {
+    if (buildCard()) clearInterval(timer);
+  }, 150);
+  setTimeout(() => clearInterval(timer), 30000);
+
+  window.addEventListener('clipfree-youtube-state', event => {
+    if (event.detail?.status === 'connected' || window.ClipFreeYouTube?.isConnected?.()) {
+      setTimeout(() => refreshRealCount(false), 700);
+    }
+  });
+
+  window.addEventListener('pageshow', () => {
+    buildCard();
+    render();
+  });
+
+  window.ClipFreeUploadAllowance = {
+    version:'21.0',
+    refresh:() => refreshRealCount(true),
+    snapshot:loadState,
+    officialVideoInsertLimit:DEFAULT_VIDEO_INSERT_LIMIT,
+    resetTimezone:TZ
+  };
+})();

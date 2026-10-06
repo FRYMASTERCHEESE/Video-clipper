@@ -1,0 +1,33 @@
+ClipFree Real Daily Upload Allowance v21 — MOBILE ONLY
+
+Replace ONE file:
+  compliance-demo-v11.js
+
+What the new card shows:
+- Official YouTube videos.insert default bucket: 100 calls/day.
+- REAL number of videos uploaded to the connected YouTube channel today.
+  This is fetched directly from the authorized YouTube Data API.
+- REAL videos.insert calls ClipFree has observed on this browser today.
+- Tracked API calls remaining on this browser.
+- Whether YouTube actually returned uploadLimitExceeded (channel daily cap).
+- Whether Google actually returned quotaExceeded/dailyLimitExceeded.
+
+IMPORTANT:
+YouTube has TWO different limits:
+1. Google Cloud / YouTube Data API videos.insert quota.
+2. A separate YouTube CHANNEL daily upload limit.
+
+YouTube does NOT expose a "remaining channel uploads" number through the API.
+ClipFree therefore will not fake or guess that hidden number. If YouTube returns
+uploadLimitExceeded, the card immediately reports 0 remaining for the channel.
+
+The 100/day API bucket resets at midnight Pacific Time.
+
+Mobile steps:
+1. Upload/replace compliance-demo-v11.js.
+2. Commit to main.
+3. Wait 1–2 minutes.
+4. Fully close old coreyvibe.org tabs.
+5. Reopen ClipFree.
+6. Connect / Refresh YouTube + Analytics.
+7. Tap "Refresh real count" on the new Real Daily Upload Allowance card.
