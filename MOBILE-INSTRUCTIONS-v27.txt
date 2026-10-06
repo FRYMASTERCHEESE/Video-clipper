@@ -1,0 +1,51 @@
+ClipFree v27 — VERIFICATION RESTORED + MOBILE SPEED FIX
+
+REPLACE THESE 2 FILES:
+1. compliance-demo-v11.js
+2. video-engine-v7.js
+
+WHY THIS VERSION
+Your 8-Short batch appeared stuck for about 10 minutes.
+v27 fixes the two most likely long mobile stalls:
+- source search is bounded and automatically rotates after a provider timeout
+- the first-time local AI narrator is bounded instead of waiting forever
+The exact inner step is also mirrored into the big batch status so you can see
+whether ClipFree is searching, narrating, encoding or uploading.
+
+MOBILE VIDEO QUALITY / SPEED
+- Phones: 720x1280 vertical HD, 30 fps, H.264 CRF 19, up to ~3 Mbps, AAC 128 kbps
+- Desktop/high-capacity systems: 1080x1920 remains available
+This is intentional. 1080p browser/WASM encoding can take many minutes on phones.
+720p vertical HD is still valid high-quality YouTube Shorts output and is much faster.
+
+YOUTUBE VERIFICATION — IMPORTANT
+v27 RESTORES every reviewer URL:
+https://coreyvibe.org/?audit=1
+https://coreyvibe.org/?compliance=1
+https://coreyvibe.org/?review=1
+
+This matters because ?audit=1 may already be in material supplied to Google/YouTube.
+Those URLs again show the full real-data reviewer panel:
+- API client / connection
+- authorized YouTube analytics
+- reusable source + rights/licence
+- generated Short/audio/captions/cover
+- generated metadata
+- real YouTube upload result + real video ID
+- checklist
+
+The NORMAL homepage remains:
+https://coreyvibe.org/
+It keeps the direct Create + SEO + Upload workflow.
+It now also has a small "YouTube Verification Evidence" link so the reviewer page
+is easy to find without interfering with uploads.
+
+DO NOT SEND FAKE DATA TO REVIEWERS
+The evidence panel still uses real connected API data only.
+
+AFTER UPLOAD
+1. Upload/replace both files on main.
+2. Wait 1–2 minutes for GitHub Pages.
+3. Open https://coreyvibe.org/?audit=1 and confirm the full evidence panel is back.
+4. For your real batch, open https://coreyvibe.org/ and run 4–8 Shorts.
+5. The batch status should now show the exact stage instead of looking frozen.

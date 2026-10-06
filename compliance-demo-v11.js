@@ -7,23 +7,14 @@
   const $ = id => document.getElementById(id);
   const qs = new URLSearchParams(location.search);
 
-  // v25: normal users never get trapped in the reviewer recording checklist.
-  // Reviewer mode is now intentionally explicit: ?review=1
-  const auditMode = qs.get('review') === '1';
+  // v27: preserve every reviewer URL that may already have been supplied to YouTube.
+  // Normal homepage remains the fast creator workflow.
+  const auditMode =
+    qs.get('review') === '1' ||
+    qs.get('audit') === '1' ||
+    qs.get('compliance') === '1';
 
-  if (auditMode) {
-    window.CLIPFREE_COMPLIANCE_RECORDING_MODE = true;
-  } else {
-    window.CLIPFREE_COMPLIANCE_RECORDING_MODE = false;
-
-    // Clean up old bookmarked ?audit=1 / ?compliance=1 URLs without reloading.
-    if (qs.has('audit') || qs.has('compliance')) {
-      const cleanUrl = new URL(location.href);
-      cleanUrl.searchParams.delete('audit');
-      cleanUrl.searchParams.delete('compliance');
-      history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-    }
-  }
+  window.CLIPFREE_COMPLIANCE_RECORDING_MODE = auditMode;
 
   let lastExport = null;
   let lastUpload = null;
@@ -4207,7 +4198,10 @@
 
   const $ = id => document.getElementById(id);
   const qs = new URLSearchParams(location.search);
-  const reviewMode = qs.get('review') === '1';
+  const reviewMode =
+    qs.get('review') === '1' ||
+    qs.get('audit') === '1' ||
+    qs.get('compliance') === '1';
 
   if (reviewMode) return;
 
@@ -4594,5 +4588,212 @@
     defaultDurationSeconds:TARGET_DURATION,
     categoryId:'15',
     vidiqMode:'free-competitor-tracking'
+  };
+})();
+
+/* CLIPFREE VERIFICATION + FAST BOUNDED PIPELINE v27 */
+/*
+  Two jobs at once:
+  1) keep the real creator homepage fast and one-click;
+  2) keep the complete YouTube API reviewer evidence visible at all historical
+     reviewer URLs: ?audit=1, ?compliance=1 and ?review=1.
+
+  It also bounds two stages that could otherwise appear frozen on mobile:
+  - federated source lookup
+  - first-time local AI narrator generation
+
+  This does not fake reviewer evidence. The audit panel continues to show only
+  real API connection data, source/licence, metadata and real YouTube video IDs.
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const SEARCH_TIMEOUT_MS = 7000;
+  const VOICE_TIMEOUT_MS = 75000;
+  const SEARCH_FLAG = '__clipfreeBoundedSearchV27';
+  const VOICE_FLAG = '__clipfreeBoundedVoiceV27';
+
+  function timeoutPromise(ms, message) {
+    return new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), ms);
+    });
+  }
+
+  function isReviewerMode() {
+    const qs = new URLSearchParams(location.search);
+    return (
+      qs.get('audit') === '1' ||
+      qs.get('compliance') === '1' ||
+      qs.get('review') === '1'
+    );
+  }
+
+  function installSearchBound() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt?.searchCommonsDownloadable) return false;
+    if (yt[SEARCH_FLAG]) return true;
+
+    const previous = yt.searchCommonsDownloadable.bind(yt);
+
+    yt.searchCommonsDownloadable = async function boundedSourceSearch(query, limit = 12) {
+      try {
+        return await Promise.race([
+          previous(query, limit),
+          timeoutPromise(
+            SEARCH_TIMEOUT_MS,
+            `Source search timed out after ${Math.round(SEARCH_TIMEOUT_MS/1000)} seconds`
+          )
+        ]);
+      } catch (err) {
+        console.warn('v27 source search rotated after timeout/provider failure', query, err);
+        try { window.ClipFreeSourceRepairV24?.rotateVarietyCursor?.(5); } catch {}
+        return [];
+      }
+    };
+
+    yt[SEARCH_FLAG] = true;
+    return true;
+  }
+
+  function installVoiceBound() {
+    const voice = window.ClipFreeVoiceover;
+    if (!voice?.generate) return false;
+    if (voice[VOICE_FLAG]) return true;
+
+    const previous = voice.generate.bind(voice);
+
+    voice.generate = async function boundedNarration(options = {}) {
+      try {
+        return await Promise.race([
+          previous(options),
+          timeoutPromise(
+            VOICE_TIMEOUT_MS,
+            'The local AI narrator took too long on this phone. ClipFree is switching to its licensed animal-audio fallback so the batch can keep moving.'
+          )
+        ]);
+      } catch (err) {
+        // animal-generator already has a PD/CC0 audio fallback for narration failure.
+        throw err;
+      }
+    };
+
+    voice[VOICE_FLAG] = true;
+    return true;
+  }
+
+  function addVerificationShortcut() {
+    if (isReviewerMode()) return true;
+    if ($('clipfreeVerificationShortcutV27')) return true;
+
+    const head = $('clipfreeSimpleStudio')?.querySelector('.simple-head');
+    if (!head) return false;
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeVerificationShortcutV27';
+    card.style.cssText =
+      'margin:12px 0;padding:12px 13px;border:1px solid #5b50a5;border-radius:13px;' +
+      'background:#11101c;color:#eeeaff;font-size:.76rem;line-height:1.5';
+
+    card.innerHTML = `
+      <strong style="display:block;margin-bottom:5px">🎥 YouTube Verification Evidence</strong>
+      <span style="color:#bdb6d6">
+        The complete real-data API evidence page is still available for YouTube reviewers.
+        It shows API connection, analytics, source/licence, generated metadata,
+        captions/cover and the real YouTube upload ID.
+      </span><br>
+      <a href="?audit=1"
+         style="display:inline-block;margin-top:8px;color:#bca8ff;font-weight:900">
+         Open reviewer evidence
+      </a>
+    `;
+
+    head.appendChild(card);
+    return true;
+  }
+
+  function addReviewerBanner() {
+    if (!isReviewerMode()) return true;
+    if ($('clipfreeReviewerV27')) return true;
+
+    const panel = $('clipfreeCompliancePanel');
+    if (!panel) return false;
+
+    const banner = document.createElement('div');
+    banner.id = 'clipfreeReviewerV27';
+    banner.style.cssText =
+      'margin:0 0 12px;padding:11px 12px;border:1px solid #2b6f48;border-radius:11px;' +
+      'background:#0d1d14;color:#b6f3c8;font-weight:900;line-height:1.45';
+    banner.textContent =
+      '✓ YouTube reviewer evidence mode — real API data only; no simulated analytics, sources or upload IDs.';
+    panel.insertBefore(banner, panel.firstChild);
+    return true;
+  }
+
+  // Mirror the exact inner generator stage into the simple batch status so a
+  // phone never appears frozen at only "fast real-video source".
+  let lastMirror = '';
+  function installProgressMirror() {
+    const inner = $('animalGeneratorStatus');
+    const outer = $('simpleStatus');
+    if (!inner || !outer || inner.dataset.clipfreeV27Mirror) return false;
+
+    inner.dataset.clipfreeV27Mirror = '1';
+
+    const mirror = () => {
+      const step = String(inner.textContent || '').trim();
+      if (!step || step === lastMirror) return;
+
+      const currentOuter = String(outer.textContent || '').trim();
+      const match = currentOuter.match(/Short\s+\d+\/\d+/i);
+      if (!match && !/completed|remaining|keep the screen on/i.test(currentOuter)) return;
+
+      lastMirror = step;
+      const prefix = match ? `${match[0]} • ` : '';
+      outer.textContent = `${prefix}${step}`;
+    };
+
+    new MutationObserver(mirror).observe(inner, {
+      childList:true,
+      characterData:true,
+      subtree:true
+    });
+    mirror();
+    return true;
+  }
+
+  function install() {
+    installSearchBound();
+    installVoiceBound();
+    installProgressMirror();
+    addVerificationShortcut();
+    addReviewerBanner();
+  }
+
+  install();
+
+  const timer = setInterval(() => {
+    install();
+
+    if (
+      installSearchBound() &&
+      installVoiceBound() &&
+      (isReviewerMode() ? Boolean($('clipfreeReviewerV27')) : Boolean($('clipfreeVerificationShortcutV27')))
+    ) {
+      clearInterval(timer);
+    }
+  }, 180);
+  setTimeout(() => clearInterval(timer), 30000);
+
+  window.addEventListener('clipfree-youtube-ready', () => setTimeout(install, 0));
+  window.addEventListener('pageshow', install);
+
+  window.CLIPFREE_V27 = {
+    version:'27.0',
+    reviewerUrls:['?audit=1','?compliance=1','?review=1'],
+    sourceSearchTimeoutMs:SEARCH_TIMEOUT_MS,
+    voiceGenerationTimeoutMs:VOICE_TIMEOUT_MS,
+    liveProgressMirror:true,
+    evidenceIsRealOnly:true
   };
 })();

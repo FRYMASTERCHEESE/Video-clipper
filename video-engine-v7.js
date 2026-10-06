@@ -35,21 +35,15 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     }
 
     const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
-    const strongMobile = mobile && memory >= 6 && cores >= 6;
 
-    if (strongMobile) {
-      return {
-        width:1080, height:1920, fps:30, crf:21, preset:'superfast',
-        maxrate:'4000k', bufsize:'8000k', audioBitrate:'160k',
-        label:'1080p Mobile Recommendation HQ'
-      };
-    }
-
+    // v27 mobile balance: 720p vertical HD is still YouTube-Shorts quality,
+    // while avoiding the huge WebAssembly cost of software-encoding 1080x1920
+    // on a phone. Desktop/high-capacity systems keep 1080p below.
     if (mobile) {
       return {
-        width:720, height:1280, fps:30, crf:20, preset:'superfast',
-        maxrate:'2800k', bufsize:'5600k', audioBitrate:'128k',
-        label:'720p Mobile Recommendation HQ'
+        width:720, height:1280, fps:30, crf:19, preset:'superfast',
+        maxrate:'3000k', bufsize:'6000k', audioBitrate:'128k',
+        label:'720p Mobile Fast Recommendation HQ'
       };
     }
 
@@ -281,7 +275,7 @@ import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist
     a.__clipfreeSpeedQualityV7 = true;
     window.CLIPFREE_VIDEO_ENGINE_V7 = {
       enabled:true,
-      version:'7.4-recommendation-quality-v26',
+      version:'7.5-fast-verification-v27',
       profile:deviceProfile(),
       singlePass:true
     };
