@@ -1,0 +1,44 @@
+ClipFree v32 — 10+ FREE SOURCE WEBSITES
+
+REPLACE ONLY:
+  compliance-demo-v11.js
+
+SUPPORTED SOURCE WEBSITES
+
+AUTOMATIC / NO KEY
+1. Wikimedia Commons
+2. Internet Archive
+3. Library of Congress
+4. NASA Image & Video Library
+
+OPTIONAL FREE API KEY
+5. Pixabay
+6. Pexels (existing keys only while new-key issuance is paused)
+7. National Park Service
+8. DVIDS
+9. U.S. National Archives
+10. Smithsonian Open Access
+
+IMPORTANT
+- Free API keys are stored only in this browser's localStorage.
+- Do NOT put API keys into GitHub.
+- ClipFree still rejects used footage and unrelated animals.
+- Provider rights are still checked; government/open-data providers can contain
+  third-party material, so v32 does not blindly treat every result as public domain.
+- v31 deep paging remains underneath v32.
+- v30 species-specific unique titles remain.
+- YouTube reviewer/audit mode is unchanged.
+
+WHY NOT BLINDLY SCRAPE HUNDREDS OF SITES?
+Many "free video" sites forbid automated scraping, require an API key, or mix
+different licenses. The safe approach is official APIs and item-level rights checks.
+
+Pexels:
+As of 5 Oct 2026, new API key issuance is currently paused. Existing keys can still
+be entered if you already have one.
+
+NORMAL SITE:
+  https://coreyvibe.org/
+
+REVIEWER:
+  https://coreyvibe.org/?audit=1
