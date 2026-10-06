@@ -1,0 +1,40 @@
+ClipFree v24 — PIPELINE HARDENING
+
+Replace ONE file:
+  compliance-demo-v11.js
+
+This fixes the current error shown on screen:
+  source validation rejected "...Bee..." because metadata does not identify
+  the requested animal
+
+What v24 changes:
+- Wrong/unrelated source metadata no longer ends the 20-Short batch immediately.
+- Up to 8 different source attempts are allowed for the same Short.
+- The exact rejected source title is added to animal-generator's REAL no-repeat history.
+- The wildlife variety cursor advances after a mismatch so the retry searches a new area.
+- Federated search results are checked against the requested animal BEFORE the generator sees them.
+- A stale red error from retry #1 is cleared before retry #2.
+- Existing saved batch progress is preserved.
+- v23 actual-animal SEO + narration remains.
+- v22 providers, v21 real allowance, v20 quality turbo, v19 wake/resume and v18 speed remain.
+
+SEO status:
+- Actual animal/species appears in the title.
+- Unique concise title.
+- Keyword-led description.
+- 3 focused hashtags.
+- Up to 8 relevant tags.
+- Captions + original narration + source attribution remain.
+- No SEO system can guarantee Shorts-feed distribution or #1 ranking because
+  YouTube ranks Shorts heavily by viewer response and personalization.
+
+IMPORTANT MOBILE CACHE STEP:
+After uploading, use a NEW Chrome Incognito tab for the first v24 test.
+This avoids an older GitHub Pages JavaScript file being reused from your phone cache.
+
+Then:
+1. Open coreyvibe.org in Incognito.
+2. Connect YouTube.
+3. Look for the green "v24 PIPELINE HARDENED" status.
+4. Tick rights.
+5. Press Resume Remaining if shown.

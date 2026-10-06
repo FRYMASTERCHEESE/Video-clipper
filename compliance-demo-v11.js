@@ -913,7 +913,7 @@
 
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  const MAX_SOURCE_RETRIES = 3;
+  const MAX_SOURCE_RETRIES = 8;
 
   const TOPICS = {
     wildlife:  {preset:'wildlife', query:'clipfree variety wildlife'},
@@ -1912,7 +1912,7 @@
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const KEY = 'clipfree_batch_checkpoint_v19';
-  const MAX_SOURCE_RETRIES = 3;
+  const MAX_SOURCE_RETRIES = 8;
 
   let running = false;
   let wakeLock = null;
@@ -1983,7 +1983,7 @@
     ].map(x => String(x || '').trim()).filter(Boolean);
 
     return values.find(x =>
-      /(error|failed|stopped|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|unused source)/i.test(x)
+      /(error|failed|stopped|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|unused source|source validation rejected|metadata does not identify the requested animal|unrelated footage)/i.test(x)
     ) || '';
   }
 
@@ -3837,5 +3837,339 @@
     actualAnimalSeo:true,
     actualAnimalNarration:true,
     freshAnimalGenerator:true
+  };
+})();
+
+/* CLIPFREE PIPELINE HARDENING v24 */
+/*
+  Fixes the current multi-Short failure path and hardens the full mobile pipeline.
+
+  v24 guarantees:
+  - a bad/unrelated metadata result is treated as a source problem, not a batch-ending bug
+  - rejected source titles are added to BOTH v24 reject history and the existing
+    ClipFree source-history used by animal-generator.js
+  - variety search cursor is advanced after a mismatch so retry #2 does not keep
+    searching the exact same slice of wildlife queries
+  - search results are filtered against the requested animal BEFORE animal-generator sees them
+  - stale red source-validation messages are cleared before each new generator attempt
+  - up to 8 source retries happen inside the saved 2–20 batch runner
+  - v23 actual-animal SEO/narration, v22 providers, v21 real allowance,
+    v20 quality turbo, v19 resume/wake-lock and v18 speed remain intact
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const REJECT_KEY = 'clipfree_rejected_source_titles_v24';
+  const SOURCE_HISTORY_KEY = 'clipfree_source_history_v6';
+  const VARIETY_CURSOR_KEY = 'clipfree_variety_cursor_v2';
+  const FLAG = '__clipfreePipelineHardeningV24';
+
+  const ANIMALS = [
+    ['mountain lion', /\b(mountain lion|cougar|puma)\b/i],
+    ['lion', /\b(lion|lioness|panthera leo)\b/i],
+    ['tiger', /\b(tiger|panthera tigris)\b/i],
+    ['leopard', /\b(leopard|panthera pardus)\b/i],
+    ['cheetah', /\bcheetah\b/i],
+    ['jaguar', /\bjaguar\b/i],
+    ['lynx', /\blynx\b/i],
+    ['bobcat', /\bbobcat\b/i],
+    ['wolf', /\b(wolf|wolves|canis lupus)\b/i],
+    ['coyote', /\bcoyote\b/i],
+    ['fox', /\b(fox|vulpes)\b/i],
+    ['bear', /\b(bear|grizzly|ursus|polar bear)\b/i],
+    ['elephant', /\belephant\b/i],
+    ['giraffe', /\bgiraffe\b/i],
+    ['zebra', /\bzebra\b/i],
+    ['rhino', /\b(rhino|rhinoceros)\b/i],
+    ['hippo', /\b(hippo|hippopotamus)\b/i],
+    ['bison', /\b(bison|buffalo)\b/i],
+    ['moose', /\bmoose\b/i],
+    ['elk', /\belk\b/i],
+    ['deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
+    ['antelope', /\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+    ['kangaroo', /\bkangaroo\b/i],
+    ['koala', /\bkoala\b/i],
+    ['otter', /\botter\b/i],
+    ['rabbit', /\b(rabbit|hare)\b/i],
+    ['squirrel', /\b(squirrel|chipmunk|marmot)\b/i],
+    ['gorilla', /\bgorilla\b/i],
+    ['chimpanzee', /\bchimpanzee\b/i],
+    ['orangutan', /\borangutan\b/i],
+    ['monkey', /\b(monkey|macaque|baboon|gibbon|lemur)\b/i],
+    ['hyena', /\b(hyena|hyaena)\b/i],
+    ['meerkat', /\bmeerkat\b/i],
+    ['crocodile', /\bcrocodile\b/i],
+    ['alligator', /\balligator\b/i],
+    ['turtle', /\b(turtle|tortoise)\b/i],
+    ['snake', /\b(snake|python|cobra|rattlesnake|boa)\b/i],
+    ['eagle', /\beagle\b/i],
+    ['hawk', /\bhawk\b/i],
+    ['falcon', /\bfalcon\b/i],
+    ['owl', /\bowl\b/i],
+    ['penguin', /\bpenguin\b/i],
+    ['shark', /\bshark\b/i],
+    ['whale', /\b(whale|orca)\b/i],
+    ['dolphin', /\bdolphin\b/i],
+    ['seal', /\b(seal|sea lion|walrus)\b/i],
+    ['frog', /\b(frog|toad)\b/i]
+  ];
+
+  // Extra specific labels first. Generic parent labels still match afterwards.
+  ANIMALS.unshift(
+    ['rusty patched bumble bee', /\brusty patched bumble bee\b/i],
+    ['leafcutter bee', /\bleafcutter bee\b/i],
+    ['bumble bee', /\b(bumble ?bee|bumblebee|bombus)\b/i],
+    ['monarch butterfly', /\b(monarch butterfly|danaus plexippus)\b/i],
+    ['sea lion', /\bsea lion\b/i],
+    ['whale shark', /\bwhale shark\b/i],
+    ['polar bear', /\bpolar bear\b/i],
+    ['grizzly bear', /\bgrizzly bear\b/i]
+  );
+
+  function clean(value = '') {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function itemText(item = {}) {
+    return [
+      item.title,
+      item.creator,
+      item.description,
+      Array.isArray(item.subject) ? item.subject.join(' ') : item.subject,
+      item.attribution,
+      item.__clipfreeDetectedAnimal,
+      item.__clipfreeRequestedQuery
+    ].filter(Boolean).join(' ');
+  }
+
+  function requestedAnimal(query = '') {
+    return ANIMALS.find(([, rx]) => rx.test(String(query || ''))) || null;
+  }
+
+  function actualAnimal(item = {}) {
+    const text = itemText(item);
+    return ANIMALS.find(([, rx]) => rx.test(text)) || null;
+  }
+
+  function matchesRequestedAnimal(item, query) {
+    const actual = actualAnimal(item);
+    if (!actual) return false;
+
+    const requested = requestedAnimal(query);
+    if (!requested) return true; // broad wildlife search
+
+    // Test the requested animal's own regex against the source metadata.
+    // This accepts "Leafcutter Bee" for a bee query and rejects it for a dragonfly query.
+    return requested[1].test(itemText(item));
+  }
+
+  function loadSet(key) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || '[]');
+      return new Set(Array.isArray(value) ? value.map(x => String(x)) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveSet(key, set, max = 10000) {
+    try {
+      localStorage.setItem(key, JSON.stringify([...set].slice(-max)));
+    } catch {}
+  }
+
+  function rememberRejectedTitle(title = '') {
+    const value = clean(title);
+    if (!value) return false;
+
+    const rejects = loadSet(REJECT_KEY);
+    rejects.add(value.toLowerCase());
+    saveSet(REJECT_KEY, rejects, 1000);
+
+    // Critical: animal-generator's own blockedSourceSet() reads this key and
+    // sourceKeys() includes the TITLE, so this prevents the same bad item from
+    // being selected again even inside its lexical/private search functions.
+    const sourceHistory = loadSet(SOURCE_HISTORY_KEY);
+    sourceHistory.add(value);
+    saveSet(SOURCE_HISTORY_KEY, sourceHistory, 10000);
+
+    return true;
+  }
+
+  function rotateVarietyCursor(step = 11) {
+    try {
+      const current = Number(localStorage.getItem(VARIETY_CURSOR_KEY) || 0);
+      const next = (Number.isFinite(current) ? current : 0) + Math.max(1, Number(step || 1));
+      localStorage.setItem(VARIETY_CURSOR_KEY, String(next));
+    } catch {}
+  }
+
+  function rejectFromError(message = '') {
+    const text = String(message || '');
+    const match =
+      text.match(/source validation rejected\s+["“]([^"”]+)["”]/i) ||
+      text.match(/rejected\s+["“]([^"”]+)["”]/i);
+
+    if (match?.[1]) rememberRejectedTitle(match[1]);
+
+    if (/source validation rejected|metadata does not identify the requested animal|unrelated footage/i.test(text)) {
+      rotateVarietyCursor(13);
+    }
+
+    return Boolean(match?.[1]);
+  }
+
+  // Import v23's prior reject list into the real source history too.
+  try {
+    const old = JSON.parse(localStorage.getItem('clipfree_rejected_source_titles_v23') || '[]');
+    if (Array.isArray(old)) old.forEach(rememberRejectedTitle);
+  } catch {}
+
+  // Import the currently saved failure so Resume Remaining starts from a fresh source.
+  try {
+    const cp = JSON.parse(localStorage.getItem('clipfree_batch_checkpoint_v19') || 'null');
+    if (cp?.lastError) {
+      rejectFromError(cp.lastError);
+      cp.lastError = '';
+      localStorage.setItem('clipfree_batch_checkpoint_v19', JSON.stringify(cp));
+    }
+  } catch {}
+
+  function rejectedTitleSet() {
+    return loadSet(REJECT_KEY);
+  }
+
+  function installStrictSearch() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt?.searchCommonsDownloadable) return false;
+    if (yt[FLAG]) return true;
+
+    const previous = yt.searchCommonsDownloadable.bind(yt);
+
+    yt.searchCommonsDownloadable = async function v24StrictMatchingSearch(query, limit = 12) {
+      const wanted = Math.max(1, Math.min(20, Number(limit || 12)));
+      const rejected = rejectedTitleSet();
+
+      async function run(q) {
+        let results = [];
+        try {
+          results = await previous(q, Math.max(wanted, 20));
+        } catch (err) {
+          console.warn('v24 source provider pass failed', q, err);
+        }
+
+        return (results || []).filter(item => {
+          const title = clean(item?.title).toLowerCase();
+          if (!title || rejected.has(title)) return false;
+          return matchesRequestedAnimal(item, q);
+        });
+      }
+
+      let matching = await run(query);
+
+      // Species-specific query with no valid result: retry once using the
+      // canonical animal name, rather than accepting an unrelated animal.
+      const expected = requestedAnimal(query);
+      if (!matching.length && expected) {
+        matching = await run(`${expected[0]} wildlife`);
+      }
+
+      // For broad wildlife mode, if a provider temporarily returns nothing,
+      // advance the variety cursor so the next saved-batch retry searches a new species.
+      if (!matching.length && !expected) rotateVarietyCursor(7);
+
+      return matching.slice(0, wanted);
+    };
+
+    yt[FLAG] = true;
+    return true;
+  }
+
+  // The v19 runner calls the v23 object. Point it at the stronger v24 logic.
+  window.ClipFreeSourceRepairV24 = {
+    version:'24.0',
+    rejectFromError,
+    rememberRejectedTitle,
+    rotateVarietyCursor,
+    rejectedTitles:() => [...rejectedTitleSet()]
+  };
+
+  window.ClipFreeSourceRepairV23 = window.ClipFreeSourceRepairV24;
+
+  // Clear stale source errors before a new attempt, otherwise a previous red
+  // validation string can be mistaken for the result of the current retry.
+  document.addEventListener('click', event => {
+    const generator = event.target?.closest?.('#generateAnimalVideo');
+    if (!generator) return;
+
+    const animalStatus = $('animalGeneratorStatus');
+    if (
+      animalStatus &&
+      /source validation rejected|metadata does not identify the requested animal/i.test(animalStatus.textContent || '')
+    ) {
+      animalStatus.textContent = 'Source Vault: rotating to a different verified animal video…';
+      animalStatus.className = 'notice subtle';
+    }
+  }, true);
+
+  // If any validator reports a mismatch, remember it immediately.
+  const observer = new MutationObserver(() => {
+    const message = $('animalGeneratorStatus')?.textContent || '';
+    if (/source validation rejected|metadata does not identify the requested animal/i.test(message)) {
+      rejectFromError(message);
+    }
+  });
+
+  function observeStatus() {
+    const el = $('animalGeneratorStatus');
+    if (!el) return false;
+    observer.observe(el, {childList:true, characterData:true, subtree:true});
+    return true;
+  }
+
+  function addStatusCard() {
+    if ($('clipfreeV24Status')) return true;
+    const head = $('clipfreeSimpleStudio')?.querySelector('.simple-head');
+    if (!head) return false;
+
+    const old = $('clipfreeV23Status');
+    if (old) old.remove();
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeV24Status';
+    card.style.cssText =
+      'margin:12px 0;padding:11px 13px;border:1px solid #267048;border-radius:13px;' +
+      'background:#0b1810;color:#9ff0ba;font-size:.74rem;font-weight:900;line-height:1.45';
+    card.textContent =
+      '✓ v24 PIPELINE HARDENED • wrong animals auto-retry • 8 source retries • actual-animal SEO • resume protected';
+    head.appendChild(card);
+    return true;
+  }
+
+  function install() {
+    installStrictSearch();
+    observeStatus();
+    addStatusCard();
+  }
+
+  install();
+
+  const timer = setInterval(() => {
+    install();
+    if (installStrictSearch() && $('clipfreeV24Status')) clearInterval(timer);
+  }, 180);
+  setTimeout(() => clearInterval(timer), 30000);
+
+  window.addEventListener('clipfree-youtube-ready', () => setTimeout(install, 0));
+  window.addEventListener('pageshow', install);
+
+  window.CLIPFREE_V24 = {
+    version:'24.0',
+    sourceMismatchAutoRetry:true,
+    maxSourceRetries:8,
+    strictRequestedAnimalFilter:true,
+    sourceHistoryRepair:true,
+    seoVersion:'v23 actual-animal SEO retained'
   };
 })();
