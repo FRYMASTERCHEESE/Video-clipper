@@ -1,0 +1,28 @@
+ClipFree v34 — WILDLIFE AUTO-RECOVERY
+
+REPLACE ONLY:
+  compliance-demo-v11.js
+
+THIS FIXES THE CURRENT SCREENSHOT ERROR:
+  source validation rejected "Monarch Butterfly on Swamp Milkweed ..."
+  because metadata does not identify the requested animal
+
+WHAT CHANGED
+- A single-Short upload no longer stays stuck after this validation error.
+- ClipFree automatically rotates the bad/mismatched source and retries up to 6 times.
+- In broad Wildlife mode, if the rejected filename clearly identifies an animal
+  (for example Monarch Butterfly), the retry search becomes that animal's wildlife
+  query so the older generator cannot compare it against a drifting unrelated query.
+- In a specific animal mode such as Lions/Bears/Tigers, ClipFree does NOT change
+  your requested animal. It searches for another matching source instead.
+- v33 source-history repair is included when the v33 package was available.
+- Existing unique titles, SEO, captions, upload-ID checks and source-history safety remain.
+- YouTube reviewer/audit mode is NOT changed.
+
+AFTER UPLOAD
+1. Fully close all old coreyvibe.org tabs.
+2. Open https://coreyvibe.org/
+3. Look for "v34 AUTO-RECOVERY".
+4. Keep 1 Short selected for the first test.
+5. Press CREATE + SEO + UPLOAD 1 SHORT NOW.
+6. If a source mismatch occurs, do not press anything — v34 should rotate and retry automatically.

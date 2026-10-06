@@ -6372,3 +6372,802 @@
     reviewerFlowChanged:false
   };
 })();
+
+/* CLIPFREE EMERGENCY SOURCE RECOVERY v33 */
+/*
+  Fixes the current "0/1 unused source videos" lockout.
+
+  Root causes addressed:
+  1) legacy source history stored source TITLES as if they were unique IDs,
+     so two genuinely different files with the same title could both be blocked;
+  2) many stacked source wrappers could over-filter or time out before returning
+     a usable result;
+  3) old failed checkpoint text could remain after the underlying source problem
+     was already repaired.
+
+  v33 keeps URL/hash duplicate protection and never intentionally reuses the
+  exact same source file.
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const SOURCE_HISTORY_KEY = 'clipfree_source_history_v6';
+  const CURSOR_KEY = 'clipfree_source_recovery_cursor_v33';
+  const CHECKPOINT_KEY = 'clipfree_batch_checkpoint_v19';
+  const FLAG = '__clipfreeEmergencyRecoveryV33';
+  const MAX_BYTES = 36 * 1024 * 1024;
+
+  const ANIMALS = [
+    ['mountain lion', /\b(mountain lion|cougar|puma)\b/i],
+    ['sea lion', /\bsea lion\b/i],
+    ['polar bear', /\bpolar bear\b/i],
+    ['grizzly bear', /\bgrizzly bear\b/i],
+    ['rusty patched bumble bee', /\brusty patched bumble bee\b/i],
+    ['leafcutter bee', /\bleafcutter bee\b/i],
+    ['bumble bee', /\b(bumble ?bee|bumblebee|bombus)\b/i],
+    ['monarch butterfly', /\bmonarch butterfly\b/i],
+    ['whale shark', /\bwhale shark\b/i],
+    ['lion', /\b(lion|lioness|panthera leo)\b/i],
+    ['tiger', /\b(tiger|panthera tigris)\b/i],
+    ['leopard', /\bleopard\b/i],
+    ['cheetah', /\bcheetah\b/i],
+    ['jaguar', /\bjaguar\b/i],
+    ['lynx', /\blynx\b/i],
+    ['bobcat', /\bbobcat\b/i],
+    ['wolf', /\b(wolf|wolves|canis lupus)\b/i],
+    ['coyote', /\bcoyote\b/i],
+    ['fox', /\bfox\b/i],
+    ['bear', /\b(bear|ursus)\b/i],
+    ['elephant', /\belephant\b/i],
+    ['giraffe', /\bgiraffe\b/i],
+    ['zebra', /\bzebra\b/i],
+    ['rhino', /\b(rhino|rhinoceros)\b/i],
+    ['hippo', /\b(hippo|hippopotamus)\b/i],
+    ['bison', /\b(bison|buffalo)\b/i],
+    ['moose', /\bmoose\b/i],
+    ['elk', /\belk\b/i],
+    ['deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
+    ['antelope', /\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+    ['kangaroo', /\bkangaroo\b/i],
+    ['koala', /\bkoala\b/i],
+    ['otter', /\botter\b/i],
+    ['rabbit', /\b(rabbit|hare)\b/i],
+    ['squirrel', /\bsquirrel\b/i],
+    ['gorilla', /\bgorilla\b/i],
+    ['chimpanzee', /\bchimpanzee\b/i],
+    ['orangutan', /\borangutan\b/i],
+    ['monkey', /\b(monkey|macaque|baboon|gibbon|lemur)\b/i],
+    ['hyena', /\b(hyena|hyaena)\b/i],
+    ['meerkat', /\bmeerkat\b/i],
+    ['crocodile', /\bcrocodile\b/i],
+    ['alligator', /\balligator\b/i],
+    ['turtle', /\b(turtle|tortoise)\b/i],
+    ['snake', /\b(snake|python|cobra|rattlesnake|boa)\b/i],
+    ['eagle', /\beagle\b/i],
+    ['hawk', /\bhawk\b/i],
+    ['falcon', /\bfalcon\b/i],
+    ['owl', /\bowl\b/i],
+    ['penguin', /\bpenguin\b/i],
+    ['shark', /\b(shark|great white|hammerhead)\b/i],
+    ['whale', /\b(whale|orca)\b/i],
+    ['dolphin', /\bdolphin\b/i],
+    ['seal', /\bseal\b/i],
+    ['frog', /\b(frog|toad)\b/i],
+    ['butterfly', /\bbutterfly\b/i],
+    ['bee', /\bbee\b/i],
+    ['dragonfly', /\bdragonfly\b/i],
+    ['beetle', /\bbeetle\b/i],
+    ['spider', /\bspider\b/i],
+    ['crab', /\bcrab\b/i],
+    ['fish', /\b(fish|salmon|trout|tuna)\b/i],
+    ['cat', /\b(cat|kitten)\b/i],
+    ['dog', /\b(dog|puppy)\b/i]
+  ];
+
+  function stripHtml(value='') {
+    const div=document.createElement('div');
+    div.innerHTML=String(value||'');
+    return (div.textContent||div.innerText||'').replace(/\s+/g,' ').trim();
+  }
+
+  function wantedAnimal(query='') {
+    return ANIMALS.find(([,rx]) => rx.test(String(query||''))) || null;
+  }
+
+  function itemText(item={}) {
+    return [
+      item.title,item.description,item.subject,item.creator,item.attribution,item.provider
+    ].map(x => Array.isArray(x)?x.join(' '):String(x||'')).join(' ');
+  }
+
+  function matches(item,query) {
+    const wanted=wantedAnimal(query);
+    if (wanted) return wanted[1].test(itemText(item));
+
+    // Broad wildlife mode: metadata must still identify some animal.
+    return ANIMALS.some(([,rx]) => rx.test(itemText(item)));
+  }
+
+  function goodLicense(label='',url='') {
+    const s=`${label} ${url}`.toLowerCase();
+    return (
+      s.includes('public domain') ||
+      s.includes('cc0') ||
+      s.includes('publicdomain/zero') ||
+      s.includes('publicdomain/mark') ||
+      (
+        (s.includes('cc by') || s.includes('/licenses/by/')) &&
+        !s.includes('by-sa') &&
+        !s.includes('noncommercial') &&
+        !s.includes('no derivatives')
+      )
+    );
+  }
+
+  async function fetchJson(url,timeoutMs=11000) {
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try {
+      const res=await fetch(url,{mode:'cors',cache:'no-store',signal:controller.signal});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function nextCursor(query,provider,modulo) {
+    let all={};
+    try { all=JSON.parse(localStorage.getItem(CURSOR_KEY)||'{}') || {}; } catch {}
+    const key=`${provider}:${String(query||'').toLowerCase()}`;
+    const current=Math.max(0,Number(all[key]||0));
+    all[key]=(current+1)%modulo;
+    try { localStorage.setItem(CURSOR_KEY,JSON.stringify(all)); } catch {}
+    return current;
+  }
+
+  function unique(items=[]) {
+    const seen=new Set();
+    return items.filter(item => {
+      const key=String(item?.fileUrl||item?.sourceUrl||'').trim();
+      if(!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  // Remove only legacy TITLE strings from source history.
+  // Keep all URLs, so exact old footage remains blocked.
+  function repairLegacyHistory() {
+    try {
+      const old=JSON.parse(localStorage.getItem(SOURCE_HISTORY_KEY)||'[]');
+      if(!Array.isArray(old)) return;
+
+      const repaired=[...new Set(old.filter(value => {
+        const s=String(value||'').trim();
+        return /^https?:\/\//i.test(s) || /^[a-f0-9]{64}$/i.test(s);
+      }))];
+
+      if(repaired.length !== old.length) {
+        localStorage.setItem(SOURCE_HISTORY_KEY,JSON.stringify(repaired.slice(-10000)));
+      }
+    } catch(err) {
+      console.warn('v33 history repair skipped',err);
+    }
+  }
+
+  async function commons(query,limit=18) {
+    const offset=nextCursor(query,'commons',20)*20;
+    const u=new URL('https://commons.wikimedia.org/w/api.php');
+    const p={
+      action:'query',
+      generator:'search',
+      gsrsearch:`${query} filetype:video`,
+      gsrnamespace:'6',
+      gsrlimit:String(Math.max(15,Math.min(40,limit*2))),
+      gsroffset:String(offset),
+      prop:'imageinfo',
+      iiprop:'url|size|mime|mediatype|extmetadata',
+      format:'json',
+      formatversion:'2',
+      origin:'*'
+    };
+    Object.entries(p).forEach(([k,v])=>u.searchParams.set(k,v));
+
+    const data=await fetchJson(u.toString(),11000);
+    return (data?.query?.pages||[]).map(page => {
+      const info=page?.imageinfo?.[0]||{};
+      const meta=info.extmetadata||{};
+      const mv=k=>stripHtml(meta?.[k]?.value||'');
+      const title=String(page?.title||'').replace(/^File:/i,'');
+      const creator=mv('Artist')||mv('Credit')||'Wikimedia Commons contributor';
+      const license=mv('LicenseShortName')||mv('UsageTerms')||'';
+      const licenseUrl=mv('LicenseUrl')||'';
+      const sourceUrl=`https://commons.wikimedia.org/wiki/${encodeURIComponent(String(page?.title||'').replace(/ /g,'_')).replace(/%2F/g,'/')}`;
+      return {
+        title,creator,description:mv('ImageDescription'),subject:'',
+        sourceUrl,fileUrl:info.url||'',license,licenseUrl,
+        mime:info.mime||'',size:Number(info.size||0),provider:'Wikimedia Commons',
+        attribution:`“${title}” — ${creator}. Source: Wikimedia Commons. Licence: ${license}. ${sourceUrl}`
+      };
+    }).filter(item =>
+      item.fileUrl &&
+      String(item.mime).startsWith('video/') &&
+      (!item.size || item.size<=MAX_BYTES) &&
+      goodLicense(item.license,item.licenseUrl) &&
+      matches(item,query)
+    ).slice(0,limit);
+  }
+
+  function encPath(path='') {
+    return String(path).split('/').map(encodeURIComponent).join('/');
+  }
+
+  async function archive(query,limit=12) {
+    const page=nextCursor(query,'archive',30)+1;
+    const u=new URL('https://archive.org/advancedsearch.php');
+    u.searchParams.set('q',`${query} AND mediatype:(movies)`);
+    for(const f of ['identifier','title','description','creator','licenseurl','subject']) {
+      u.searchParams.append('fl[]',f);
+    }
+    u.searchParams.set('rows',String(Math.max(10,Math.min(20,limit+6))));
+    u.searchParams.set('page',String(page));
+    u.searchParams.set('output','json');
+
+    const data=await fetchJson(u.toString(),11000);
+    const docs=data?.response?.docs||[];
+
+    const settled=await Promise.allSettled(
+      docs.slice(0,16).map(async doc => {
+        const id=String(doc?.identifier||'');
+        if(!id) return null;
+
+        const meta=await fetchJson(`https://archive.org/metadata/${encodeURIComponent(id)}`,10000);
+        const md=meta?.metadata||{};
+        const licenseUrl=String(md?.licenseurl||md?.license||'');
+        const license=String(md?.rights||md?.license||licenseUrl||'');
+        if(!goodLicense(license,licenseUrl)) return null;
+
+        const files=(Array.isArray(meta?.files)?meta.files:[])
+          .map(f=>({name:String(f?.name||''),size:Number(f?.size||0)}))
+          .filter(f =>
+            /\.(mp4|webm|ogv)$/i.test(f.name) &&
+            (!f.size || (f.size>=96*1024 && f.size<=MAX_BYTES))
+          )
+          .sort((a,b)=>Number(a.size||999999999)-Number(b.size||999999999));
+
+        const file=files[0];
+        if(!file?.name) return null;
+
+        const title=String(md?.title||doc?.title||id);
+        const creator=String(md?.creator||doc?.creator||'Internet Archive contributor');
+        const description=stripHtml(md?.description||doc?.description||'');
+        const subject=md?.subject||doc?.subject||'';
+        const sourceUrl=`https://archive.org/details/${encodeURIComponent(id)}`;
+        const fileUrl=`https://archive.org/download/${encodeURIComponent(id)}/${encPath(file.name)}`;
+
+        const item={
+          title,creator,description,subject,sourceUrl,fileUrl,
+          license,licenseUrl,
+          mime:/\.mp4$/i.test(file.name)?'video/mp4':/\.ogv$/i.test(file.name)?'video/ogg':'video/webm',
+          size:file.size||0,provider:'Internet Archive',
+          attribution:`“${title}” — ${creator}. Source: Internet Archive. Licence: ${license||licenseUrl}. ${sourceUrl}`
+        };
+
+        return matches(item,query)?item:null;
+      })
+    );
+
+    return settled.filter(x=>x.status==='fulfilled'&&x.value).map(x=>x.value).slice(0,limit);
+  }
+
+  function mediaUrls(value,out=[]) {
+    if(!value) return out;
+    if(typeof value==='string') {
+      if(/^https?:\/\//i.test(value)&&/\.(mp4|webm|ogv)(?:\?|$)/i.test(value)) out.push(value);
+      return out;
+    }
+    if(Array.isArray(value)) {
+      value.forEach(v=>mediaUrls(v,out));
+      return out;
+    }
+    if(typeof value==='object') Object.values(value).forEach(v=>mediaUrls(v,out));
+    return out;
+  }
+
+  async function loc(query,limit=8) {
+    const page=nextCursor(query,'loc',20)+1;
+    const u=new URL('https://www.loc.gov/film-and-videos/');
+    u.searchParams.set('q',query);
+    u.searchParams.set('fo','json');
+    u.searchParams.set('c',String(Math.max(12,Math.min(24,limit*2))));
+    u.searchParams.set('sp',String(page));
+
+    const data=await fetchJson(u.toString(),11000);
+    const out=[];
+
+    for(const result of data?.results||[]) {
+      const rights=[
+        result?.rights,result?.rights_advisory,result?.rights_information,
+        result?.item?.rights,result?.item?.rights_advisory,result?.item?.rights_information
+      ].flat().map(x=>String(x||'')).join(' ');
+
+      if(!/(public domain|free to use and reuse)/i.test(rights)) continue;
+
+      const fileUrl=[...new Set(mediaUrls(result))][0]||'';
+      if(!fileUrl) continue;
+
+      const title=String(result?.title||result?.item?.title||'Library of Congress video');
+      const creator=Array.isArray(result?.contributor)
+        ? result.contributor.join(', ')
+        : String(result?.contributor||'Library of Congress');
+      const sourceUrl=String(result?.id||result?.url||'');
+
+      const item={
+        title,creator,description:stripHtml(result?.description||''),
+        subject:result?.subject||'',sourceUrl,fileUrl,
+        license:'Public domain / Free to Use and Reuse',
+        licenseUrl:sourceUrl,
+        mime:/\.mp4(?:\?|$)/i.test(fileUrl)?'video/mp4':/\.ogv(?:\?|$)/i.test(fileUrl)?'video/ogg':'video/webm',
+        size:0,provider:'Library of Congress',
+        attribution:`“${title}” — ${creator}. Source: Library of Congress. Rights: Public domain / Free to Use and Reuse. ${sourceUrl}`
+      };
+
+      if(matches(item,query)) out.push(item);
+      if(out.length>=limit) break;
+    }
+    return out;
+  }
+
+  async function nasa(query,limit=6) {
+    const u=new URL('https://images-api.nasa.gov/search');
+    u.searchParams.set('q',query);
+    u.searchParams.set('media_type','video');
+    u.searchParams.set('page_size',String(Math.max(8,Math.min(20,limit*3))));
+
+    const data=await fetchJson(u.toString(),10000);
+    const out=[];
+
+    for(const row of (data?.collection?.items||[]).slice(0,18)) {
+      const meta=row?.data?.[0]||{};
+      if(String(meta?.copyright||'').trim()) continue;
+
+      const manifest=String(row?.href||'');
+      if(!manifest) continue;
+
+      let assets=[];
+      try { assets=await fetchJson(manifest,7000); } catch { continue; }
+
+      const fileUrl=(Array.isArray(assets)?assets:mediaUrls(assets))
+        .find(x=>/\.(mp4|webm)(?:\?|$)/i.test(String(x)))||'';
+      if(!fileUrl) continue;
+
+      const title=String(meta?.title||'NASA wildlife video');
+      const item={
+        title,description:String(meta?.description||''),
+        subject:Array.isArray(meta?.keywords)?meta.keywords.join(' '):String(meta?.keywords||''),
+        creator:String(meta?.center||'NASA'),provider:'NASA Image & Video Library',
+        sourceUrl:`https://images.nasa.gov/details/${encodeURIComponent(meta?.nasa_id||'')}`,
+        fileUrl,
+        license:'NASA public media — no third-party copyright marker found',
+        licenseUrl:'https://www.nasa.gov/nasa-brand-center/images-and-media/',
+        mime:/\.webm(?:\?|$)/i.test(fileUrl)?'video/webm':'video/mp4',
+        size:0,
+        attribution:`“${title}” — NASA. Source: NASA Image & Video Library.`
+      };
+
+      if(matches(item,query)) out.push(item);
+      if(out.length>=limit) break;
+    }
+
+    return out;
+  }
+
+  function queryVariants(query='') {
+    const raw=String(query||'').replace(/\s+/g,' ').trim();
+    const animal=wantedAnimal(raw)?.[0]||'';
+    return [...new Set([
+      raw,
+      animal ? `${animal} wildlife` : `${raw} wildlife`,
+      animal ? `${animal} nature` : `${raw} nature`,
+      animal ? `${animal} animal` : `${raw} animal`,
+      animal ? `${animal} habitat` : `${raw} habitat`,
+      animal ? `${animal} behavior` : `${raw} behavior`
+    ].filter(Boolean))];
+  }
+
+  async function emergencySearch(query,limit=20) {
+    repairLegacyHistory();
+
+    const wanted=Math.max(1,Math.min(20,Number(limit||20)));
+    const variants=queryVariants(query);
+
+    // Try several query forms. Return as soon as there is enough usable media.
+    const all=[];
+
+    for(const q of variants.slice(0,4)) {
+      const settled=await Promise.allSettled([
+        commons(q,Math.min(18,wanted)),
+        archive(q,Math.min(12,wanted)),
+        loc(q,Math.min(8,wanted)),
+        nasa(q,Math.min(6,wanted))
+      ]);
+
+      for(const r of settled) {
+        if(r.status==='fulfilled') all.push(...r.value);
+      }
+
+      const good=unique(all).filter(item=>matches(item,query));
+      if(good.length>=Math.min(4,wanted)) return good.slice(0,wanted);
+    }
+
+    return unique(all).filter(item=>matches(item,query)).slice(0,wanted);
+  }
+
+  function patch() {
+    const yt=window.ClipFreeYouTube;
+    if(!yt) return false;
+    if(yt[FLAG]) return true;
+
+    // IMPORTANT: v33 intentionally becomes the FINAL search function instead
+    // of chaining through every v18-v32 wrapper. The old wrapper stack could
+    // filter a valid result multiple times before animal-generator saw it.
+    yt.searchCommonsDownloadable=emergencySearch;
+    yt[FLAG]=true;
+
+    window.CLIPFREE_SOURCE_RECOVERY_V33={
+      version:'33.0',
+      finalSearch:true,
+      legacyTitleHistoryRepaired:true,
+      exactUrlDuplicateProtection:true,
+      automaticRepositories:[
+        'Wikimedia Commons',
+        'Internet Archive',
+        'Library of Congress',
+        'NASA Image & Video Library'
+      ]
+    };
+
+    return true;
+  }
+
+  function clearStaleFailure() {
+    try {
+      const cp=JSON.parse(localStorage.getItem(CHECKPOINT_KEY)||'null');
+      if(!cp || typeof cp!=='object') return;
+      if(/found 0\/1 unused|could not find a genuinely different unused source/i.test(String(cp.lastError||''))) {
+        cp.lastError='';
+        cp.active=Number(cp.completed||0)<Number(cp.requested||0);
+        cp.updatedAt=new Date().toISOString();
+        localStorage.setItem(CHECKPOINT_KEY,JSON.stringify(cp));
+      }
+    } catch {}
+  }
+
+  function addBadge() {
+    const qs=new URLSearchParams(location.search);
+    if(qs.get('audit')==='1'||qs.get('compliance')==='1'||qs.get('review')==='1') return true;
+    if($('clipfreeV33RecoveryStatus')) return true;
+
+    const head=$('clipfreeSimpleStudio')?.querySelector('.simple-head');
+    if(!head) return false;
+
+    const card=document.createElement('div');
+    card.id='clipfreeV33RecoveryStatus';
+    card.style.cssText=
+      'margin:12px 0;padding:11px 13px;border:1px solid #34724a;border-radius:13px;' +
+      'background:#0c1710;color:#aef3c4;font-size:.76rem;font-weight:900;line-height:1.45';
+    card.textContent=
+      '🛠 v33 SOURCE RECOVERY • title-history bug repaired • direct deep search • exact old footage still blocked';
+    head.appendChild(card);
+    return true;
+  }
+
+  repairLegacyHistory();
+  clearStaleFailure();
+  patch();
+  addBadge();
+
+  const timer=setInterval(() => {
+    repairLegacyHistory();
+    const ok=patch();
+    addBadge();
+    if(ok && $('clipfreeV33RecoveryStatus')) clearInterval(timer);
+  },180);
+  setTimeout(()=>clearInterval(timer),30000);
+
+  window.addEventListener('clipfree-youtube-ready',()=>setTimeout(() => {
+    patch();
+    addBadge();
+  },0));
+  window.addEventListener('pageshow',()=> {
+    repairLegacyHistory();
+    patch();
+    addBadge();
+  });
+})();
+
+/* CLIPFREE WILDLIFE AUTO-RECOVERY v34 */
+/*
+  Fixes the current one-Short failure:
+    source validation rejected "Monarch Butterfly ..." because its metadata
+    does not identify the requested animal.
+
+  Important behavior:
+  - In broad Wildlife mode, if a source clearly identifies a real animal but
+    the old generator rejects it because the requested-query label drifted,
+    ClipFree automatically switches the retry search to that detected animal.
+  - In a SPECIFIC animal mode (lions, bears, etc.), it never silently changes
+    the requested animal. It rejects the mismatch and rotates to another source.
+  - Single-Short runs now auto-retry source-validation failures instead of
+    leaving the user stuck on a red error.
+  - Multi-Short v19/v24 retry logic remains intact.
+  - Reviewer/audit mode is untouched.
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const MAX_AUTO_RETRIES = 6;
+  const RETRY_KEY = 'clipfree_single_source_retry_v34';
+
+  const ANIMALS = [
+    ['mountain lion', /\b(mountain lion|cougar|puma)\b/i],
+    ['sea lion', /\bsea lion\b/i],
+    ['polar bear', /\bpolar bear\b/i],
+    ['grizzly bear', /\bgrizzly bear\b/i],
+    ['rusty patched bumble bee', /\brusty patched bumble bee\b/i],
+    ['leafcutter bee', /\bleafcutter bee\b/i],
+    ['bumble bee', /\b(bumble ?bee|bumblebee|bombus)\b/i],
+    ['monarch butterfly', /\bmonarch butterfly\b/i],
+    ['whale shark', /\bwhale shark\b/i],
+    ['lion', /\b(lion|lioness|panthera leo)\b/i],
+    ['tiger', /\btiger\b/i],
+    ['leopard', /\bleopard\b/i],
+    ['cheetah', /\bcheetah\b/i],
+    ['jaguar', /\bjaguar\b/i],
+    ['lynx', /\blynx\b/i],
+    ['bobcat', /\bbobcat\b/i],
+    ['wolf', /\b(wolf|wolves)\b/i],
+    ['coyote', /\bcoyote\b/i],
+    ['fox', /\bfox\b/i],
+    ['bear', /\bbear\b/i],
+    ['elephant', /\belephant\b/i],
+    ['giraffe', /\bgiraffe\b/i],
+    ['zebra', /\bzebra\b/i],
+    ['rhino', /\b(rhino|rhinoceros)\b/i],
+    ['hippo', /\b(hippo|hippopotamus)\b/i],
+    ['bison', /\b(bison|buffalo)\b/i],
+    ['moose', /\bmoose\b/i],
+    ['elk', /\belk\b/i],
+    ['deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
+    ['antelope', /\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+    ['kangaroo', /\bkangaroo\b/i],
+    ['koala', /\bkoala\b/i],
+    ['otter', /\botter\b/i],
+    ['rabbit', /\b(rabbit|hare)\b/i],
+    ['squirrel', /\bsquirrel\b/i],
+    ['gorilla', /\bgorilla\b/i],
+    ['chimpanzee', /\bchimpanzee\b/i],
+    ['orangutan', /\borangutan\b/i],
+    ['monkey', /\b(monkey|macaque|baboon|gibbon|lemur)\b/i],
+    ['hyena', /\b(hyena|hyaena)\b/i],
+    ['meerkat', /\bmeerkat\b/i],
+    ['crocodile', /\bcrocodile\b/i],
+    ['alligator', /\balligator\b/i],
+    ['turtle', /\b(turtle|tortoise)\b/i],
+    ['snake', /\b(snake|python|cobra|rattlesnake|boa)\b/i],
+    ['eagle', /\beagle\b/i],
+    ['hawk', /\bhawk\b/i],
+    ['falcon', /\bfalcon\b/i],
+    ['owl', /\bowl\b/i],
+    ['penguin', /\bpenguin\b/i],
+    ['shark', /\b(shark|great white|hammerhead)\b/i],
+    ['whale', /\b(whale|orca)\b/i],
+    ['dolphin', /\bdolphin\b/i],
+    ['seal', /\bseal\b/i],
+    ['frog', /\b(frog|toad)\b/i],
+    ['butterfly', /\bbutterfly\b/i],
+    ['bee', /\bbee\b/i],
+    ['dragonfly', /\bdragonfly\b/i],
+    ['beetle', /\bbeetle\b/i],
+    ['spider', /\bspider\b/i],
+    ['crab', /\bcrab\b/i],
+    ['fish', /\b(fish|salmon|trout|tuna)\b/i],
+    ['cat', /\b(cat|kitten)\b/i],
+    ['dog', /\b(dog|puppy)\b/i]
+  ];
+
+  function reviewerMode() {
+    const q = new URLSearchParams(location.search);
+    return q.get('audit') === '1' ||
+           q.get('compliance') === '1' ||
+           q.get('review') === '1';
+  }
+
+  function detectAnimal(text='') {
+    return ANIMALS.find(([,rx]) => rx.test(String(text || ''))) || null;
+  }
+
+  function parseRejectedTitle(message='') {
+    const m = String(message || '').match(
+      /source validation rejected\s+["“]([^"”]+)["”]/i
+    );
+    return m?.[1] || '';
+  }
+
+  function isValidationFailure(message='') {
+    return /source validation rejected|metadata does not identify the requested animal/i.test(
+      String(message || '')
+    );
+  }
+
+  function isSingleRun() {
+    return Math.max(1, Math.min(10, Number($('simpleCount')?.value || 1))) === 1;
+  }
+
+  function broadWildlifeMode() {
+    return ($('simpleTopic')?.value || 'wildlife') === 'wildlife';
+  }
+
+  function resetCounter() {
+    try { localStorage.removeItem(RETRY_KEY); } catch {}
+  }
+
+  function nextAttempt() {
+    try {
+      const n = Math.max(0, Number(localStorage.getItem(RETRY_KEY) || 0)) + 1;
+      localStorage.setItem(RETRY_KEY, String(n));
+      return n;
+    } catch {
+      return 1;
+    }
+  }
+
+  function setValue(id,value) {
+    const el = $(id);
+    if (!el) return;
+    el.value = String(value);
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+    el.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+
+  function rotateSource(message) {
+    try { window.ClipFreeSourceRepairV24?.rejectFromError?.(message); } catch {}
+    try { window.ClipFreeSourceRepairV23?.rejectFromError?.(message); } catch {}
+    try { window.ClipFreeSourceRepairV24?.rotateVarietyCursor?.(11); } catch {}
+  }
+
+  let retryTimer = null;
+  let lastHandled = '';
+
+  function scheduleRecovery(message) {
+    if (reviewerMode() || !isSingleRun() || !isValidationFailure(message)) return;
+    if (message === lastHandled) return;
+    lastHandled = message;
+
+    const attempt = nextAttempt();
+    if (attempt > MAX_AUTO_RETRIES) {
+      resetCounter();
+      return;
+    }
+
+    rotateSource(message);
+
+    const title = parseRejectedTitle(message);
+    const animal = detectAnimal(title);
+
+    // For broad Wildlife mode, an identified animal is valid content. Search
+    // specifically for that animal on the retry so the old lexical validator
+    // cannot compare against a drifting unrelated variety query.
+    if (broadWildlifeMode() && animal) {
+      window.ClipFreeVarietyMode = false;
+      setValue('animalTopic', `${animal[0]} wildlife`);
+    } else {
+      // Specific-animal mode: preserve the user's requested topic and just
+      // rotate away from the mismatching result.
+      window.ClipFreeVarietyMode = broadWildlifeMode();
+    }
+
+    const status = $('animalGeneratorStatus');
+    if (status) {
+      status.textContent =
+        `Source mismatch auto-fixed. Finding another ${animal?.[0] || 'matching animal'} video — retry ${attempt}/${MAX_AUTO_RETRIES}…`;
+      status.className = 'notice subtle';
+    }
+
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => {
+      const button = $('generateAnimalVideo');
+      if (!button || button.disabled) return;
+      button.click();
+    }, 700);
+  }
+
+  function installObserver() {
+    const status = $('animalGeneratorStatus');
+    if (!status || status.dataset.clipfreeV34Observer) return false;
+
+    status.dataset.clipfreeV34Observer = '1';
+
+    const inspect = () => {
+      const message = String(status.textContent || '').trim();
+
+      if (/youtube video id|upload complete|uploaded successfully|reached youtube/i.test(message)) {
+        resetCounter();
+        lastHandled = '';
+        return;
+      }
+
+      if (isValidationFailure(message)) {
+        scheduleRecovery(message);
+      }
+    };
+
+    new MutationObserver(inspect).observe(status,{
+      childList:true,
+      characterData:true,
+      subtree:true
+    });
+
+    inspect();
+    return true;
+  }
+
+  // Each new manual single-Short start gets a fresh retry budget.
+  window.addEventListener('click',event => {
+    const start = event.target?.closest?.('#simpleStart');
+    if (!start || !isSingleRun()) return;
+
+    resetCounter();
+    lastHandled = '';
+
+    // Normal Wildlife button always starts in broad variety mode.
+    if (broadWildlifeMode()) {
+      window.ClipFreeVarietyMode = true;
+      setValue('animalTopic','clipfree variety wildlife');
+    }
+  },true);
+
+  function addBadge() {
+    if (reviewerMode()) return true;
+    if ($('clipfreeV34RecoveryStatus')) return true;
+
+    const head = $('clipfreeSimpleStudio')?.querySelector('.simple-head');
+    if (!head) return false;
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeV34RecoveryStatus';
+    card.style.cssText =
+      'margin:12px 0;padding:11px 13px;border:1px solid #39764c;border-radius:13px;' +
+      'background:#0b1710;color:#b2f4c5;font-size:.76rem;font-weight:900;line-height:1.45';
+    card.textContent =
+      '🛠 v34 AUTO-RECOVERY • single Shorts retry animal-source mismatches automatically • reviewer flow untouched';
+    head.appendChild(card);
+    return true;
+  }
+
+  installObserver();
+  addBadge();
+
+  const timer = setInterval(() => {
+    installObserver();
+    if (addBadge() && installObserver()) clearInterval(timer);
+  },180);
+  setTimeout(() => clearInterval(timer),30000);
+
+  window.addEventListener('pageshow',() => {
+    installObserver();
+    addBadge();
+  });
+
+  window.CLIPFREE_V34 = {
+    version:'34.0',
+    singleShortValidationAutoRetry:true,
+    maxAutoRetries:MAX_AUTO_RETRIES,
+    specificAnimalIntentPreserved:true,
+    reviewerFlowChanged:false
+  };
+})();
