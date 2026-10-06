@@ -1,0 +1,44 @@
+ClipFree v30 — SPECIES-SPECIFIC UNIQUE TITLES
+
+REPLACE ONLY:
+  compliance-demo-v11.js
+
+WHY
+Your current YouTube Studio screenshot shows the strongest recent Short is:
+  Bear Up Close in Nature 🐻
+
+The weaker recent titles are generic:
+  Wild Animal Wildlife Moment
+  Wild Animal Life in the Wild
+
+v30 keeps the winning TITLE STYLE without copying the exact same title.
+
+EXAMPLES
+Bear Up Close in Nature 🐻
+Bear in the Wild 🐻
+Bear Nature Encounter 🐻
+Watch This Bear Up Close 🐻
+Bear Caught on Camera 🐻
+
+For other animals:
+Turtle Up Close in Nature 🐢
+Owl Nature Encounter 🦉
+Bumble Bee in the Wild 🐝
+Dolphin Caught on Camera 🐬
+
+RULES
+- Every title must identify the actual animal/species.
+- Every title is checked against local title history AND known YouTube titles.
+- No generic "Wild Animal ..." title is intentionally generated.
+- Hashtags stay out of the title.
+- Existing SEO, captions, source attribution and upload logic remain.
+- YouTube reviewer/audit flow is NOT changed.
+
+IMPORTANT
+The bear video's early performance is encouraging, but one title cannot prove
+that title wording alone caused the extra views. v30 copies the useful pattern:
+clear species + simple curiosity/nature wording + one relevant emoji.
+
+After upload, fully close old ClipFree tabs and reopen coreyvibe.org.
+Look for:
+  v30 SPECIES TITLES

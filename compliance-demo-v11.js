@@ -5110,3 +5110,239 @@
     sourceSearchTimeoutMs:18000
   };
 })();
+
+/* CLIPFREE SPECIES TITLE GUARD v30 */
+/*
+  Goal: every wildlife Short gets a different, animal-specific title in the
+  same clean style as "Bear Up Close in Nature 🐻".
+
+  This is the FINAL title pass before youtube.js reads the export.
+  It does not alter the reviewer/audit flow.
+*/
+(() => {
+  'use strict';
+
+  const TITLE_KEY = 'clipfree_species_title_history_v30';
+
+  const ANIMALS = [
+    ['Mountain Lion', /\b(mountain lion|cougar|puma)\b/i, '🐆'],
+    ['Sea Lion', /\bsea lion\b/i, '🦭'],
+    ['Polar Bear', /\bpolar bear\b/i, '🐻‍❄️'],
+    ['Grizzly Bear', /\bgrizzly bear\b/i, '🐻'],
+    ['Rusty Patched Bumble Bee', /\brusty patched bumble bee\b/i, '🐝'],
+    ['Leafcutter Bee', /\bleafcutter bee\b/i, '🐝'],
+    ['Bumble Bee', /\b(bumble ?bee|bumblebee|bombus)\b/i, '🐝'],
+    ['Monarch Butterfly', /\bmonarch butterfly\b/i, '🦋'],
+    ['Whale Shark', /\bwhale shark\b/i, '🦈'],
+    ['Lion', /\b(lion|lioness|panthera leo)\b/i, '🦁'],
+    ['Tiger', /\b(tiger|panthera tigris)\b/i, '🐅'],
+    ['Leopard', /\bleopard\b/i, '🐆'],
+    ['Cheetah', /\bcheetah\b/i, '🐆'],
+    ['Jaguar', /\bjaguar\b/i, '🐆'],
+    ['Lynx', /\blynx\b/i, '🐈'],
+    ['Bobcat', /\bbobcat\b/i, '🐈'],
+    ['Wolf', /\b(wolf|wolves)\b/i, '🐺'],
+    ['Coyote', /\bcoyote\b/i, '🐺'],
+    ['Fox', /\bfox\b/i, '🦊'],
+    ['Bear', /\b(bear|ursus)\b/i, '🐻'],
+    ['Elephant', /\belephant\b/i, '🐘'],
+    ['Giraffe', /\bgiraffe\b/i, '🦒'],
+    ['Zebra', /\bzebra\b/i, '🦓'],
+    ['Rhino', /\b(rhino|rhinoceros)\b/i, '🦏'],
+    ['Hippo', /\b(hippo|hippopotamus)\b/i, '🦛'],
+    ['Bison', /\b(bison|buffalo)\b/i, '🐃'],
+    ['Moose', /\bmoose\b/i, '🫎'],
+    ['Elk', /\belk\b/i, '🦌'],
+    ['Deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i, '🦌'],
+    ['Kangaroo', /\bkangaroo\b/i, '🦘'],
+    ['Koala', /\bkoala\b/i, '🐨'],
+    ['Otter', /\botter\b/i, '🦦'],
+    ['Rabbit', /\b(rabbit|hare)\b/i, '🐇'],
+    ['Squirrel', /\bsquirrel\b/i, '🐿️'],
+    ['Gorilla', /\bgorilla\b/i, '🦍'],
+    ['Chimpanzee', /\bchimpanzee\b/i, '🐒'],
+    ['Orangutan', /\borangutan\b/i, '🦧'],
+    ['Monkey', /\b(monkey|macaque|baboon|gibbon|lemur)\b/i, '🐒'],
+    ['Hyena', /\b(hyena|hyaena)\b/i, '🐾'],
+    ['Crocodile', /\bcrocodile\b/i, '🐊'],
+    ['Alligator', /\balligator\b/i, '🐊'],
+    ['Turtle', /\b(turtle|tortoise)\b/i, '🐢'],
+    ['Snake', /\b(snake|python|cobra|rattlesnake|boa)\b/i, '🐍'],
+    ['Eagle', /\beagle\b/i, '🦅'],
+    ['Hawk', /\bhawk\b/i, '🦅'],
+    ['Falcon', /\bfalcon\b/i, '🦅'],
+    ['Owl', /\bowl\b/i, '🦉'],
+    ['Penguin', /\bpenguin\b/i, '🐧'],
+    ['Shark', /\b(shark|great white|hammerhead)\b/i, '🦈'],
+    ['Whale', /\b(whale|orca)\b/i, '🐋'],
+    ['Dolphin', /\bdolphin\b/i, '🐬'],
+    ['Seal', /\bseal\b/i, '🦭'],
+    ['Frog', /\b(frog|toad)\b/i, '🐸'],
+    ['Bee', /\bbee\b/i, '🐝'],
+    ['Butterfly', /\bbutterfly\b/i, '🦋'],
+    ['Dragonfly', /\bdragonfly\b/i, '🪲'],
+    ['Beetle', /\bbeetle\b/i, '🪲'],
+    ['Spider', /\bspider\b/i, '🕷️'],
+    ['Crab', /\bcrab\b/i, '🦀'],
+    ['Cat', /\b(cat|kitten)\b/i, '🐱'],
+    ['Dog', /\b(dog|puppy)\b/i, '🐶']
+  ];
+
+  const TITLE_STYLES = [
+    label => `${label} Up Close in Nature`,
+    label => `${label} in the Wild`,
+    label => `${label} Nature Encounter`,
+    label => `Watch This ${label} Up Close`,
+    label => `${label} Wildlife Moment`,
+    label => `${label} Caught on Camera`,
+    label => `${label} in Its Natural Habitat`,
+    label => `A Closer Look at This ${label}`,
+    label => `${label} Exploring the Wild`,
+    label => `${label} Real Wildlife Encounter`
+  ];
+
+  function loadHistory() {
+    try {
+      const x = JSON.parse(localStorage.getItem(TITLE_KEY) || '[]');
+      return Array.isArray(x) ? x : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(title) {
+    try {
+      const old = loadHistory();
+      old.unshift(title);
+      localStorage.setItem(
+        TITLE_KEY,
+        JSON.stringify([...new Set(old)].slice(0, 1500))
+      );
+    } catch {}
+  }
+
+  function sourceText(detail = {}) {
+    const top = Array.isArray(detail.sources) ? detail.sources : [];
+    const inner = Array.isArray(detail.source?.sources) ? detail.source.sources : [];
+    return [
+      detail.detectedAnimal,
+      detail.requestedSourceQuery,
+      detail.searchTopic,
+      detail.title,
+      detail.source?.detectedAnimal,
+      detail.source?.__clipfreeDetectedAnimal,
+      detail.source?.requestedSourceQuery,
+      detail.source?.__clipfreeRequestedQuery,
+      detail.source?.title,
+      ...top.map(x => `${x?.detectedAnimal || ''} ${x?.requestedQuery || ''} ${x?.title || ''}`),
+      ...inner.map(x => `${x?.detectedAnimal || ''} ${x?.requestedQuery || ''} ${x?.title || ''}`)
+    ].filter(Boolean).join(' ');
+  }
+
+  function actualAnimal(detail = {}) {
+    const text = sourceText(detail);
+    return ANIMALS.find(([, rx]) => rx.test(text)) || null;
+  }
+
+  function chooseUniqueTitle(detail = {}) {
+    const found = actualAnimal(detail);
+    if (!found) return '';
+
+    const [label,,emoji] = found;
+
+    const used = new Set([
+      ...loadHistory(),
+      ...(window.ClipFreeYouTube?.getKnownVideoTitles?.() || [])
+    ].map(x => String(x || '').trim().toLowerCase()).filter(Boolean));
+
+    // Stable source-derived offset gives variety without random duplicate titles.
+    const seedText = sourceText(detail);
+    let seed = 0;
+    for (let i = 0; i < seedText.length; i++) {
+      seed = ((seed * 33) + seedText.charCodeAt(i)) >>> 0;
+    }
+
+    for (let i = 0; i < TITLE_STYLES.length; i++) {
+      const base = TITLE_STYLES[(seed + i) % TITLE_STYLES.length](label);
+      const title = `${base} ${emoji}`.replace(/\s+/g, ' ').trim().slice(0, 85);
+      if (!used.has(title.toLowerCase())) {
+        saveHistory(title);
+        return title;
+      }
+    }
+
+    // Never fall back to "Wild Animal ...". Keep species name and uniqueness.
+    const suffix = String(Date.now()).slice(-4);
+    const fallback = `${label} Up Close in Nature ${emoji} ${suffix}`.slice(0, 85);
+    saveHistory(fallback);
+    return fallback;
+  }
+
+  function updateFields(detail, title) {
+    detail.title = title;
+    detail.__clipfreeSpeciesTitleV30 = true;
+
+    for (const id of ['uploadTitle','seoTitle']) {
+      const el = document.getElementById(id);
+      if (el) el.value = title;
+    }
+
+    if (window.ClipFreeExport === detail) {
+      window.ClipFreeExport.title = title;
+      window.ClipFreeExport.__clipfreeSpeciesTitleV30 = true;
+    }
+  }
+
+  // Loaded after every older SEO/title listener, so this becomes the last
+  // metadata pass before youtube.js receives the export event in bubble phase.
+  window.addEventListener('clipfree-export-ready', event => {
+    const detail = event.detail || {};
+    if (detail.kind !== 'animal-generator') return;
+
+    const title = chooseUniqueTitle(detail);
+    if (!title) {
+      // Do not overwrite with another generic "Wild Animal" title.
+      // Existing source-validation/retry code remains responsible for finding
+      // another identifiable animal source.
+      return;
+    }
+
+    updateFields(detail, title);
+  }, true);
+
+  function addBadge() {
+    if (document.getElementById('clipfreeV30TitleStatus')) return true;
+
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('audit') === '1' || qs.get('compliance') === '1' || qs.get('review') === '1') {
+      return true;
+    }
+
+    const head = document.querySelector('#clipfreeSimpleStudio .simple-head');
+    if (!head) return false;
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeV30TitleStatus';
+    card.style.cssText =
+      'margin:12px 0;padding:11px 13px;border:1px solid #72591d;border-radius:13px;' +
+      'background:#181409;color:#ffe39a;font-size:.76rem;font-weight:900;line-height:1.45';
+    card.textContent =
+      '🏆 v30 SPECIES TITLES • every Short gets a different actual-animal title • no generic Wild Animal titles';
+    head.appendChild(card);
+    return true;
+  }
+
+  addBadge();
+  const timer = setInterval(() => {
+    if (addBadge()) clearInterval(timer);
+  }, 180);
+  setTimeout(() => clearInterval(timer), 30000);
+
+  window.CLIPFREE_V30 = {
+    version:'30.0',
+    speciesOnlyTitles:true,
+    uniqueTitles:true,
+    genericWildAnimalTitles:false,
+    reviewerFlowChanged:false
+  };
+})();
