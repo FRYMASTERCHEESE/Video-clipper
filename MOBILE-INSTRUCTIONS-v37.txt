@@ -1,0 +1,24 @@
+ClipFree v37 — REAL WILD ANIMAL ENCOUNTERS
+
+REPLACE:
+1. compliance-demo-v11.js
+2. ai-voiceover.js
+
+v37 keeps v36 Recovery Mode:
+- one Short only
+- human preview before upload
+- manual approval required
+
+New v37 filters:
+- reject zoo/enclosure/cage/aquarium/captive metadata
+- reject pets/domestic/farm/training/circus
+- reject animation/slideshow/still-photo metadata
+- require source metadata to identify a wild animal
+- prefer nature/habitat/behavior clues
+
+You must also tick a second checkbox confirming the preview is a REAL WILD ANIMAL ENCOUNTER.
+
+Reviewer/audit mode is unchanged.
+
+After uploading, fully close old tabs and reopen https://coreyvibe.org/
+Look for: v37 REAL WILD ENCOUNTERS

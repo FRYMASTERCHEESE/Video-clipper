@@ -1,7 +1,6 @@
-/* ClipFree AI — ORIGINAL LOCAL AI VOICEOVER v6
-   Generates an original narration for every animal Short in the browser.
-   Kokoro-82M / kokoro-js run locally after the model is downloaded.
-   No music, no copied narration, no app watermark.
+/* ClipFree AI — UNIQUE BRAND NARRATION v35
+   Keeps one familiar narrator voice for channel consistency,
+   but generates a different animal-specific script for every Short.
 */
 (() => {
   'use strict';
@@ -12,8 +11,13 @@
     'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm'
   ];
 
-  // Rotate good-quality voices so batches do not all sound identical.
-  const VOICES = ['af_heart', 'af_bella', 'am_michael', 'am_fenrir', 'bf_emma'];
+  // Keep one recognizable channel voice by default.
+  const BRAND_VOICE = 'af_heart';
+  const AVAILABLE_VOICES = ['af_heart', 'af_bella', 'am_michael', 'am_fenrir', 'bf_emma'];
+
+  const HISTORY_KEY = 'clipfree_unique_voiceover_history_v35';
+  const SEQUENCE_KEY = 'clipfree_voiceover_sequence_v35';
+
   let ttsPromise = null;
   let modulePromise = null;
 
@@ -28,8 +32,10 @@
 
   async function loadModule() {
     if (modulePromise) return modulePromise;
+
     modulePromise = (async () => {
       let lastError = null;
+
       for (const url of IMPORT_URLS) {
         try {
           const mod = await import(url);
@@ -39,13 +45,16 @@
           console.warn('ClipFree voice module import failed:', url, err);
         }
       }
+
       throw lastError || new Error('The local AI voice module could not be loaded.');
     })();
+
     return modulePromise;
   }
 
   async function loadTts() {
     if (ttsPromise) return ttsPromise;
+
     ttsPromise = (async () => {
       setStatus('Loading the local AI narrator for the first time…');
       const { KokoroTTS } = await loadModule();
@@ -53,8 +62,6 @@
       const memory = Number(navigator.deviceMemory || 4);
       const primaryDtype = memory >= 6 ? 'q8' : 'q4';
 
-      // q8 gives the stronger voice quality on devices with enough memory.
-      // q4 remains the low-memory fallback. Model files are browser-cached.
       try {
         return await KokoroTTS.from_pretrained(MODEL_ID, {
           dtype: primaryDtype,
@@ -72,7 +79,6 @@
     try {
       return await ttsPromise;
     } catch (err) {
-      // Allow a clean retry later if the network/model load was interrupted.
       ttsPromise = null;
       throw err;
     }
@@ -80,30 +86,67 @@
 
   const ANIMALS = [
     ['mountain lion', /\b(mountain lion|cougar|puma)\b/i],
+    ['sea lion', /\bsea lion\b/i],
+    ['polar bear', /\bpolar bear\b/i],
+    ['grizzly bear', /\bgrizzly bear\b/i],
+    ['rusty patched bumble bee', /\brusty patched bumble bee\b/i],
+    ['leafcutter bee', /\bleafcutter bee\b/i],
+    ['bumble bee', /\b(bumble ?bee|bumblebee|bombus)\b/i],
+    ['monarch butterfly', /\bmonarch butterfly\b/i],
+    ['whale shark', /\bwhale shark\b/i],
     ['lion', /\b(lion|lioness|panthera leo)\b/i],
     ['tiger', /\b(tiger|panthera tigris)\b/i],
     ['leopard', /\b(leopard|panthera pardus)\b/i],
     ['cheetah', /\b(cheetah|acinonyx jubatus)\b/i],
     ['jaguar', /\bjaguar\b/i],
+    ['lynx', /\blynx\b/i],
+    ['bobcat', /\bbobcat\b/i],
     ['wolf', /\b(wolf|wolves|canis lupus)\b/i],
     ['coyote', /\b(coyote|canis latrans)\b/i],
     ['fox', /\bfox\b/i],
-    ['bear', /\b(bear|grizzly|polar bear)\b/i],
+    ['bear', /\b(bear|ursus)\b/i],
     ['elephant', /\belephant\b/i],
     ['giraffe', /\bgiraffe\b/i],
     ['zebra', /\bzebra\b/i],
+    ['rhino', /\b(rhino|rhinoceros)\b/i],
+    ['hippo', /\b(hippo|hippopotamus)\b/i],
     ['moose', /\bmoose\b/i],
-    ['deer', /\b(deer|stag|doe|buck)\b/i],
+    ['elk', /\belk\b/i],
+    ['deer', /\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
     ['bison', /\b(bison|buffalo)\b/i],
-    ['hyena', /\bhyena\b/i],
+    ['antelope', /\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+    ['kangaroo', /\bkangaroo\b/i],
+    ['koala', /\bkoala\b/i],
+    ['otter', /\botter\b/i],
+    ['rabbit', /\b(rabbit|hare)\b/i],
+    ['squirrel', /\bsquirrel\b/i],
+    ['gorilla', /\bgorilla\b/i],
+    ['chimpanzee', /\bchimpanzee\b/i],
+    ['orangutan', /\borangutan\b/i],
+    ['monkey', /\b(monkey|macaque|baboon|gibbon|lemur)\b/i],
+    ['hyena', /\b(hyena|hyaena)\b/i],
+    ['meerkat', /\bmeerkat\b/i],
     ['crocodile', /\bcrocodile\b/i],
     ['alligator', /\balligator\b/i],
+    ['turtle', /\b(turtle|tortoise)\b/i],
+    ['snake', /\b(snake|python|cobra|rattlesnake|boa)\b/i],
     ['eagle', /\beagle\b/i],
+    ['hawk', /\bhawk\b/i],
+    ['falcon', /\bfalcon\b/i],
     ['owl', /\bowl\b/i],
-    ['shark', /\bshark\b/i],
-    ['whale', /\bwhale\b/i],
+    ['penguin', /\bpenguin\b/i],
+    ['shark', /\b(shark|great white|hammerhead)\b/i],
+    ['whale', /\b(whale|orca)\b/i],
     ['dolphin', /\bdolphin\b/i],
-    ['seal', /\b(seal|sea lion)\b/i],
+    ['seal', /\bseal\b/i],
+    ['frog', /\b(frog|toad)\b/i],
+    ['butterfly', /\bbutterfly\b/i],
+    ['bee', /\bbee\b/i],
+    ['dragonfly', /\bdragonfly\b/i],
+    ['beetle', /\bbeetle\b/i],
+    ['spider', /\bspider\b/i],
+    ['crab', /\bcrab\b/i],
+    ['fish', /\b(fish|salmon|trout|tuna)\b/i],
     ['kitten', /\b(kitten|cat)\b/i],
     ['puppy', /\b(puppy|dog)\b/i]
   ];
@@ -114,12 +157,12 @@
     ['walking', /\bwalk|walking\b/i],
     ['running', /\brun|running|sprinting\b/i],
     ['swimming', /\bswim|swimming\b/i],
-    ['feeding', /\bfeed|feeding|eating|grazing\b/i],
-    ['resting', /\brest|resting|sleeping\b/i],
-    ['playing', /\bplay|playing\b/i],
-    ['climbing', /\bclimb|climbing\b/i],
-    ['flying', /\bfly|flying|soaring\b/i],
-    ['hunting', /\bhunt|hunting|stalking\b/i]
+    ['feeding', /\b(feed|feeding|eating|grazing|foraging)\b/i],
+    ['resting', /\b(rest|resting|sleeping)\b/i],
+    ['playing', /\b(play|playing)\b/i],
+    ['climbing', /\b(climb|climbing)\b/i],
+    ['flying', /\b(fly|flying|soaring)\b/i],
+    ['hunting', /\b(hunt|hunting|stalking)\b/i]
   ];
 
   const HABITATS = [
@@ -128,7 +171,7 @@
     ['wetland', /\b(wetland|marsh|swamp)\b/i],
     ['desert', /\bdesert\b/i],
     ['grassland', /\b(grassland|prairie|steppe)\b/i],
-    ['river', /\briver|stream\b/i],
+    ['river', /\b(river|stream)\b/i],
     ['lake', /\blake\b/i],
     ['ocean', /\b(ocean|sea|marine)\b/i],
     ['mountains', /\b(mountain|alpine)\b/i],
@@ -141,6 +184,11 @@
       source?.title,
       source?.creator,
       source?.sourceUrl,
+      source?.description,
+      source?.subject,
+      source?.provider,
+      source?.__clipfreeDetectedAnimal,
+      source?.__clipfreeRequestedQuery,
       preset?.label,
       preset?.query,
       customTopic
@@ -148,121 +196,198 @@
   }
 
   function detect(list, text, fallback = '') {
-    return list.find(([, re]) => re.test(text))?.[0] || fallback;
+    return list.find(([, re]) => re.test(String(text || '')))?.[0] || fallback;
   }
 
   function sourceLabel(source, preset, customTopic) {
     const text = sourceText(source, preset, customTopic);
     const detected = detect(ANIMALS, text, '');
     if (detected) return detected;
+
     const label = clean(preset?.label || '');
     if (/wild animals?/i.test(label)) return 'wild animal';
     return label ? label.toLowerCase() : 'wild animal';
   }
 
-  function sentencePool({ animal, action, habitat, style }) {
-    const place = habitat ? ` in the ${habitat}` : ' in the wild';
-    const behavior = action ? ` ${action}` : ' moving through its surroundings';
-
-    const pools = {
-      dramatic: [
-        `Watch closely. This ${animal} is${behavior}${place}, and every movement changes the scene.`,
-        `Notice the posture, pace, and direction as this ${animal} reacts to what is around it.`,
-        `Wildlife moments can change in seconds, which is what makes real animal behavior so compelling.`,
-        `Keep watching to the end and look for the small details you might miss the first time.`
-      ],
-      calm: [
-        `Take a quiet look at this ${animal}${place}.`,
-        `Watch the natural rhythm of its movement and the way it responds to the environment.`,
-        `Small changes in direction, posture, and attention can make a wildlife moment fascinating.`,
-        `Enjoy this peaceful encounter and notice something new on a second watch.`
-      ],
-      cute: [
-        `Here is a close look at this ${animal}${place}.`,
-        `Watch the little movements, expressions, and changes in attention as the moment unfolds.`,
-        `The most memorable animal clips are often built from simple, natural behavior.`,
-        `Stay to the end and see which detail becomes your favorite part.`
-      ],
-      documentary: [
-        `You are watching a real ${animal}${place}.`,
-        `In this moment, it is${behavior}, while constantly responding to its surroundings.`,
-        `Body position, pace, and direction are useful clues when you are watching animal behavior.`,
-        `Look closely and see how much detail appears when you watch the scene a second time.`
-      ]
-    };
-    return pools[style] || pools.documentary;
+  function hashText(value='') {
+    let h = 2166136261 >>> 0;
+    const s = String(value || '');
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
   }
 
-  function fitNarration(options) {
+  function nextSequence() {
+    try {
+      const current = Math.max(0, Number(localStorage.getItem(SEQUENCE_KEY) || 0));
+      const next = current + 1;
+      localStorage.setItem(SEQUENCE_KEY, String(next));
+      return next;
+    } catch {
+      return Date.now();
+    }
+  }
+
+  function loadHistory() {
+    try {
+      const value = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      return Array.isArray(value) ? value : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(text) {
+    try {
+      const old = loadHistory();
+      old.unshift(text);
+      localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify([...new Set(old)].slice(0, 500))
+      );
+    } catch {}
+  }
+
+  function poolFor({ animal, action, habitat }) {
+    const place = habitat ? ` in the ${habitat}` : ' in the wild';
+    const actionPhrase = action ? ` while ${action}` : '';
+
+    return {
+      hooks: [
+        `Look closely at this ${animal}${place}.`,
+        `Watch this ${animal} for the next few seconds.`,
+        `This ${animal} moment is easy to miss if you look away.`,
+        `Here is a closer look at a ${animal}${place}.`,
+        `Notice what this ${animal} does next.`,
+        `Take a second look at this ${animal}.`,
+        `This real ${animal} encounter has a lot happening in a short moment.`,
+        `Watch the movement of this ${animal} carefully.`,
+        `A simple wildlife moment can reveal a lot about a ${animal}.`,
+        `This ${animal} caught the camera at exactly the right moment.`,
+        `There is more happening in this ${animal} clip than you might notice at first.`,
+        `Keep your eyes on this ${animal}.`
+      ],
+
+      observations: [
+        `Its direction and pace keep changing as the scene unfolds.`,
+        `The smallest movements make this wildlife moment feel completely different from the last one.`,
+        `Watch how it uses the space around it instead of only focusing on the animal itself.`,
+        `Its body position gives you clues about where its attention is going.`,
+        `The background matters too, because the environment shapes every wildlife encounter.`,
+        `Look at the timing of each movement and how quickly the scene changes.`,
+        `This is the kind of natural behavior that makes real wildlife footage interesting to replay.`,
+        `Notice the posture, movement, and pauses rather than watching only the biggest action.`,
+        `Every few seconds there is another small detail worth catching.`,
+        `The scene feels simple at first, but the movement makes it more interesting on a second watch.`,
+        `Real animal footage is unpredictable, which is why no two encounters look exactly the same.`,
+        `The way this ${animal} moves through the frame is what makes this clip stand out.`,
+        action
+          ? `In this clip, the ${animal} is ${action}, and its movement keeps changing through the scene.`
+          : `The ${animal} keeps responding to its surroundings throughout the clip.`,
+        habitat
+          ? `The ${habitat} setting adds important context to what the ${animal} is doing.`
+          : `The surroundings give useful context to the animal's movement.`
+      ],
+
+      closers: [
+        `What detail did you notice first?`,
+        `Did you spot something different on the second watch?`,
+        `Would you have noticed that movement in real time?`,
+        `Which part of this encounter stood out to you most?`,
+        `Watch it once more and focus on the animal's direction.`,
+        `There is usually one detail you only notice on a replay.`,
+        `Follow Wildlife Encounters TV for another real wildlife moment.`,
+        `More real wildlife encounters are coming next.`,
+        `Would you keep watching if you saw this in the wild?`,
+        `Replay it and see if you catch a detail you missed the first time.`
+      ]
+    };
+  }
+
+  function candidateNarration(options, salt = 0) {
     const duration = Math.max(10, Number(options.duration) || 30);
     const text = sourceText(options.source, options.preset, options.customTopic);
     const animal = sourceLabel(options.source, options.preset, options.customTopic);
     const action = detect(ACTIONS, text, '');
     const habitat = detect(HABITATS, text, '');
-    const style = clean(options.style || 'documentary').toLowerCase();
 
-    const hooks = [
-      `Wait until you see how this ${animal} moves.`,
-      `Look closely at this ${animal}.`,
-      `This wildlife moment is worth a second look.`,
-      `Watch what this ${animal} does next.`,
-      `Here is a real ${animal} moment from the wild.`
-    ];
+    const sequence = Math.max(
+      1,
+      Number(options.__clipfreeNarrationSequence || options.batchIndex || 0) + 1
+    );
 
-    const closers = [
-      `If you enjoy real wildlife moments, follow Wildlife Encounters TV for the next one.`,
-      `Watch again and see what detail you notice the second time.`,
-      `Follow for more real animal moments and wildlife Shorts.`,
-      `There is always another detail hiding in real wildlife footage.`
-    ];
+    const seed = (
+      hashText(text) +
+      (sequence * 2654435761) +
+      (salt * 2246822519)
+    ) >>> 0;
 
-    const idx = Math.max(0, Number(options.batchIndex || 0));
-    const sentences = [
-      hooks[idx % hooks.length],
-      ...sentencePool({ animal, action, habitat, style }),
-      closers[idx % closers.length]
-    ];
+    const pools = poolFor({ animal, action, habitat });
 
-    // Aim for roughly 85–90% of the Short. The v7 video engine pads silence
-    // after narration instead of looping or cutting spoken words.
-    const targetWords = Math.max(16, Math.round(duration * 1.75));
-    const chosen = [];
-    let count = 0;
+    const hook = pools.hooks[seed % pools.hooks.length];
 
-    for (const sentence of sentences) {
-      chosen.push(sentence);
-      count += sentence.split(/\s+/).filter(Boolean).length;
-      if (count >= targetWords) break;
+    const chosen = [hook];
+    const used = new Set([hook]);
+
+    const targetWords = Math.max(18, Math.round(duration * 1.65));
+    let count = hook.split(/\s+/).filter(Boolean).length;
+
+    let offset = Math.floor(seed / 7);
+
+    while (count < targetWords && chosen.length < 5) {
+      const line = pools.observations[offset % pools.observations.length];
+      offset += 3;
+
+      if (!line || used.has(line)) continue;
+      used.add(line);
+      chosen.push(line);
+      count += line.split(/\s+/).filter(Boolean).length;
     }
 
-    // For longer requested clips, add non-repetitive observation lines.
-    const extra = [
-      `Real wildlife is unpredictable, so the smallest change in movement can completely change the story of a scene.`,
-      `The best way to watch is to focus on where the animal looks, how quickly it moves, and how it uses the space around it.`,
-      `No two encounters unfold exactly the same way, which is why genuine animal footage can be so rewarding to study.`
-    ];
-    let p = 0;
-    while (count < targetWords && p < extra.length) {
-      chosen.push(extra[(idx + p) % extra.length]);
-      count += extra[(idx + p) % extra.length].split(/\s+/).filter(Boolean).length;
-      p += 1;
+    // Add a closer only when there is enough duration for it.
+    if (duration >= 18) {
+      const closer = pools.closers[(seed + sequence) % pools.closers.length];
+      if (!used.has(closer)) chosen.push(closer);
     }
 
     return clean(chosen.join(' '));
   }
 
-  async function generate(options = {}) {
-    const narration = fitNarration(options);
-    const voiceIndex = Math.max(0, Number(options.batchIndex || 0)) % VOICES.length;
-    const voice = VOICES[voiceIndex];
+  function fitNarration(options = {}) {
+    const history = new Set(loadHistory());
 
-    setStatus(`Creating original AI narration (${voiceIndex + 1}/${VOICES.length} voice style)…`);
+    for (let salt = 0; salt < 24; salt++) {
+      const narration = candidateNarration(options, salt);
+      if (!history.has(narration)) return narration;
+    }
+
+    // Extremely unlikely fallback, but still guarantees the exact script differs.
+    return clean(
+      `${candidateNarration(options, 29)} This encounter was captured in a different wildlife moment.`
+    );
+  }
+
+  async function generate(options = {}) {
+    const sequence = nextSequence();
+
+    const narration = fitNarration({
+      ...options,
+      __clipfreeNarrationSequence: sequence
+    });
+
+    saveHistory(narration);
+
+    // Keep the same recognizable narrator for brand consistency.
+    const voice = clean(options.voice || BRAND_VOICE);
+
+    setStatus(`Creating unique animal-specific AI narration • script ${sequence}…`);
+
     const tts = await loadTts();
 
     const audio = await tts.generate(narration, {
       voice,
-      // Slightly slower helps the narration naturally fill the Short and
-      // reduces any chance of the audio being looped by the montage mixer.
       speed: 1.0
     });
 
@@ -273,7 +398,7 @@
 
     const file = new File(
       [blob],
-      `clipfree-original-ai-narration-${Date.now()}-${voiceIndex}.wav`,
+      `clipfree-unique-ai-narration-${Date.now()}-${sequence}.wav`,
       { type: 'audio/wav' }
     );
 
@@ -284,18 +409,24 @@
       provider: 'Kokoro-82M via kokoro-js',
       local: true,
       originalScript: true,
+      uniqueScript: true,
+      narrationSequence: sequence,
       watermark: false
     };
   }
 
   window.ClipFreeVoiceover = {
-    version: '10.0',
+    version: '35.0',
     generate,
     buildNarration: fitNarration,
-    voices: [...VOICES],
+    voices: [...AVAILABLE_VOICES],
+    defaultVoice: BRAND_VOICE,
     model: MODEL_ID,
-    licenseNote: 'Kokoro-82M and kokoro-js are Apache-2.0 licensed; narration text is created specifically for each ClipFree Short.'
+    uniqueScripts: true,
+    persistentSequence: true,
+    licenseNote:
+      'Kokoro-82M and kokoro-js are Apache-2.0 licensed. ClipFree creates a source-specific narration script for each Short.'
   };
 
-  console.info('ClipFree Original AI Voiceover v6 is ready.');
+  console.info('ClipFree Unique Brand Narration v35 is ready.');
 })();

@@ -7171,3 +7171,635 @@
     reviewerFlowChanged:false
   };
 })();
+
+/* CLIPFREE YOUTUBE-SAFE RECOVERY MODE v36 */
+/*
+  Recovery mode after loss of YouTube Advanced Features.
+
+  Normal site only:
+  - exactly ONE Short at a time
+  - no Resume batch button
+  - no automatic batch uploads
+  - every generated Short must be previewed by the user before upload
+  - upload requires a manual "reviewed and accurate" checkbox
+  - exact title / narration / source repeats are warned about
+  - reviewer/audit mode is untouched
+
+  This intentionally slows publishing down and increases human review.
+*/
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const REVIEW_HISTORY_KEY = 'clipfree_recovery_approved_v36';
+  const CHECKPOINT_KEY = 'clipfree_batch_checkpoint_v19';
+  const WRAP_FLAG = '__clipfreeRecoveryPreviewWrappedV36';
+
+  function reviewerMode() {
+    const q = new URLSearchParams(location.search);
+    return q.get('audit') === '1' ||
+           q.get('compliance') === '1' ||
+           q.get('review') === '1';
+  }
+
+  if (reviewerMode()) {
+    window.CLIPFREE_V36 = {
+      version:'36.0',
+      recoveryMode:false,
+      reviewerFlowChanged:false
+    };
+    return;
+  }
+
+  function loadHistory() {
+    try {
+      const x = JSON.parse(localStorage.getItem(REVIEW_HISTORY_KEY) || '[]');
+      return Array.isArray(x) ? x : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(item) {
+    try {
+      const old = loadHistory();
+      old.unshift(item);
+      localStorage.setItem(
+        REVIEW_HISTORY_KEY,
+        JSON.stringify(old.slice(0, 300))
+      );
+    } catch {}
+  }
+
+  function normalized(value='') {
+    return String(value || '').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+
+  function firstSource(meta={}) {
+    const one = Array.isArray(meta.sources) ? meta.sources[0] : null;
+    return one || meta.source || null;
+  }
+
+  function originalityReport(meta={}) {
+    const history = loadHistory();
+    const title = normalized(meta.title);
+    const narration = normalized(meta.voiceoverText || meta.story);
+    const source = firstSource(meta);
+    const sourceKey = normalized(
+      source?.sourceUrl ||
+      source?.fileUrl ||
+      source?.title ||
+      ''
+    );
+
+    const exactTitle = title && history.some(x => normalized(x.title) === title);
+    const exactNarration = narration && history.some(x => normalized(x.narration) === narration);
+    const exactSource = sourceKey && history.some(x => normalized(x.sourceKey) === sourceKey);
+
+    return {
+      exactTitle,
+      exactNarration,
+      exactSource,
+      safe: !exactTitle && !exactNarration && !exactSource
+    };
+  }
+
+  function forceOneShort() {
+    const ids = ['simpleCount','animalBatchCount','autoBatchCount','wizardBatchCount'];
+
+    for (const id of ids) {
+      const el = $(id);
+      if (!el) continue;
+
+      if (el.tagName === 'SELECT') {
+        [...el.options].forEach(option => {
+          if (Number(option.value) !== 1) option.remove();
+        });
+
+        if (![...el.options].some(o => Number(o.value) === 1)) {
+          const option = document.createElement('option');
+          option.value = '1';
+          option.textContent = '1 Short';
+          el.appendChild(option);
+        }
+      }
+
+      el.value = '1';
+      try { el.min = '1'; el.max = '1'; } catch {}
+    }
+
+    const start = $('simpleStart');
+    if (start && !start.disabled) {
+      start.textContent = '👀 CREATE + PREVIEW 1 SHORT';
+    }
+
+    $('clipfreeResumeBatch')?.remove();
+
+    try {
+      localStorage.removeItem(CHECKPOINT_KEY);
+    } catch {}
+  }
+
+  function updateSimpleCopy() {
+    const badge = document.querySelector('#clipfreeSimpleStudio .simple-badge');
+    if (badge) badge.textContent = 'YOUTUBE RECOVERY MODE • HUMAN REVIEW BEFORE EVERY UPLOAD';
+
+    const title = document.querySelector('#clipfreeSimpleStudio .simple-head h1');
+    if (title) title.innerHTML = 'Create <span>1 carefully reviewed Short</span> at a time.';
+
+    const intro = document.querySelector('#clipfreeSimpleStudio .simple-head p');
+    if (intro) {
+      intro.textContent =
+        'ClipFree creates one Short, then stops for you to watch it, check the animal, title, narration, source and description before anything is uploaded to YouTube.';
+    }
+
+    const note = document.querySelector('#clipfreeSimpleStudio .simple-note');
+    if (note) {
+      note.textContent =
+        'Recovery Mode intentionally disables batch uploading. One Short is created at a time and cannot upload until you manually review and approve it. This does not guarantee restoration of Advanced Features; it is designed to make your publishing workflow more careful and less repetitive.';
+    }
+
+    const seo = document.querySelector('#clipfreeSimpleStudio .simple-seo-list');
+    if (seo) {
+      const labels = [
+        '1 Short only',
+        'Human preview required',
+        'Actual animal check',
+        'Unique narration',
+        'Unique title',
+        'Duplicate-source check',
+        'Accurate description',
+        '8 max tags',
+        '3 hashtags',
+        '9:16 safe cover',
+        'Captions',
+        'PD/CC0 attribution'
+      ];
+      seo.innerHTML = '';
+      labels.forEach(label => {
+        const chip = document.createElement('span');
+        chip.textContent = label;
+        seo.appendChild(chip);
+      });
+    }
+  }
+
+  function closePreview(result) {
+    const root = $('clipfreeRecoveryPreviewV36');
+    if (!root) return;
+
+    const video = root.querySelector('video');
+    if (video?.src?.startsWith('blob:')) {
+      try { URL.revokeObjectURL(video.src); } catch {}
+    }
+
+    root.remove();
+
+    if (result?.focusStart) {
+      setTimeout(() => $('simpleStart')?.scrollIntoView({
+        behavior:'smooth',
+        block:'center'
+      }), 60);
+    }
+  }
+
+  function createPreview(file, meta, originalUpload) {
+    return new Promise((resolve, reject) => {
+      closePreview();
+
+      const report = originalityReport(meta);
+      const source = firstSource(meta);
+
+      const overlay = document.createElement('div');
+      overlay.id = 'clipfreeRecoveryPreviewV36';
+      overlay.style.cssText =
+        'position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.92);' +
+        'overflow:auto;padding:18px;box-sizing:border-box;color:#fff;font-family:system-ui,sans-serif';
+
+      const card = document.createElement('div');
+      card.style.cssText =
+        'max-width:680px;margin:0 auto;background:#111018;border:1px solid #3c3746;' +
+        'border-radius:18px;padding:16px;box-sizing:border-box';
+
+      const title = String(meta?.title || 'Untitled Short');
+      const narration = String(meta?.voiceoverText || meta?.story || 'No narration text available.');
+      const description = String(meta?.description || '');
+      const attribution = String(meta?.attribution || '');
+      const sourceTitle = String(source?.title || 'Source title unavailable');
+      const sourceUrl = String(source?.sourceUrl || '');
+      const detectedAnimal = String(meta?.detectedAnimal || source?.detectedAnimal || 'Review manually');
+
+      const warningBits = [];
+      if (report.exactTitle) warningBits.push('exact title seen before');
+      if (report.exactNarration) warningBits.push('exact narration seen before');
+      if (report.exactSource) warningBits.push('exact source seen before');
+
+      card.innerHTML = `
+        <div style="font-size:.78rem;font-weight:900;color:#b9f3c7;margin-bottom:8px">
+          YOUTUBE RECOVERY MODE • NOTHING UPLOADS UNTIL YOU APPROVE
+        </div>
+        <h2 style="margin:0 0 12px;font-size:1.25rem">Review this Short carefully</h2>
+
+        <video id="clipfreeRecoveryVideoV36" controls playsinline
+          style="width:100%;max-height:70vh;background:#000;border-radius:13px"></video>
+
+        <div style="margin-top:14px;padding:12px;border:1px solid #34303d;border-radius:12px;background:#0d0c12">
+          <div style="font-weight:900;margin-bottom:6px">Title</div>
+          <div style="font-size:.92rem">${escapeHtml(title)}</div>
+        </div>
+
+        <div style="margin-top:10px;padding:12px;border:1px solid #34303d;border-radius:12px;background:#0d0c12">
+          <div style="font-weight:900;margin-bottom:6px">Detected animal</div>
+          <div style="font-size:.92rem">${escapeHtml(detectedAnimal)}</div>
+        </div>
+
+        <details style="margin-top:10px;padding:12px;border:1px solid #34303d;border-radius:12px;background:#0d0c12">
+          <summary style="font-weight:900;cursor:pointer">Narration</summary>
+          <div style="margin-top:8px;font-size:.86rem;line-height:1.5">${escapeHtml(narration)}</div>
+        </details>
+
+        <details style="margin-top:10px;padding:12px;border:1px solid #34303d;border-radius:12px;background:#0d0c12">
+          <summary style="font-weight:900;cursor:pointer">Description + attribution</summary>
+          <div style="margin-top:8px;font-size:.8rem;line-height:1.45;white-space:pre-wrap">${escapeHtml(description)}</div>
+          <div style="margin-top:10px;font-size:.76rem;line-height:1.45;white-space:pre-wrap;color:#c9c4d0">${escapeHtml(attribution)}</div>
+        </details>
+
+        <div style="margin-top:10px;padding:12px;border:1px solid ${report.safe ? '#275c3a' : '#7b4f25'};border-radius:12px;background:${report.safe ? '#0d1912' : '#21170d'}">
+          <div style="font-weight:900;color:${report.safe ? '#9ce4b3' : '#ffcc8b'}">
+            ${report.safe ? '✓ No exact title/narration/source repeat found in approved Recovery Mode history' : '⚠ Originality warning'}
+          </div>
+          ${warningBits.length ? `<div style="margin-top:6px;font-size:.8rem">${escapeHtml(warningBits.join(' • '))}</div>` : ''}
+          <div style="margin-top:7px;font-size:.76rem;color:#c9c4d0">
+            Source: ${escapeHtml(sourceTitle)}
+            ${sourceUrl ? `<br><a href="${escapeAttr(sourceUrl)}" target="_blank" rel="noopener" style="color:#bba6ff">Open source page</a>` : ''}
+          </div>
+        </div>
+
+        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:12px;border:1px solid #3a3542;border-radius:12px;background:#0d0c12">
+          <input id="clipfreeRecoveryApproveCheckV36" type="checkbox" style="margin-top:3px;transform:scale(1.25)">
+          <span style="font-size:.84rem;line-height:1.45">
+            I watched this Short and checked that the footage, animal, title, narration, description and source attribution are accurate and sufficiently different from my other uploads.
+          </span>
+        </label>
+
+        <button id="clipfreeRecoveryUploadV36" type="button" disabled
+          style="width:100%;margin-top:12px;padding:14px;border:0;border-radius:12px;background:#245f3d;color:#fff;font-weight:900;font-size:1rem;opacity:.5">
+          APPROVE + UPLOAD THIS 1 SHORT
+        </button>
+
+        <button id="clipfreeRecoveryRejectV36" type="button"
+          style="width:100%;margin-top:9px;padding:13px;border:1px solid #59404a;border-radius:12px;background:#211118;color:#ffb7c1;font-weight:900">
+          REJECT — DO NOT UPLOAD
+        </button>
+      `;
+
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      const video = $('clipfreeRecoveryVideoV36');
+      if (video) {
+        try {
+          video.src = URL.createObjectURL(file);
+          video.load();
+        } catch {}
+      }
+
+      const check = $('clipfreeRecoveryApproveCheckV36');
+      const upload = $('clipfreeRecoveryUploadV36');
+      const rejectBtn = $('clipfreeRecoveryRejectV36');
+
+      check?.addEventListener('change', () => {
+        if (!upload) return;
+        upload.disabled = !check.checked;
+        upload.style.opacity = check.checked ? '1' : '.5';
+      });
+
+      rejectBtn?.addEventListener('click', () => {
+        closePreview({focusStart:true});
+        reject(new Error('You rejected this Short during Recovery Mode review. Nothing was uploaded to YouTube.'));
+      });
+
+      upload?.addEventListener('click', async () => {
+        if (!check?.checked || upload.disabled) return;
+
+        upload.disabled = true;
+        upload.textContent = 'UPLOADING TO YOUTUBE…';
+
+        try {
+          const result = await originalUpload(file, meta);
+
+          if (!result?.id) {
+            throw new Error('YouTube did not return a real video ID.');
+          }
+
+          saveHistory({
+            at:new Date().toISOString(),
+            videoId:result.id,
+            title,
+            narration,
+            sourceKey:source?.sourceUrl || source?.fileUrl || source?.title || '',
+            detectedAnimal
+          });
+
+          closePreview();
+          resolve(result);
+        } catch (err) {
+          upload.disabled = false;
+          upload.textContent = 'APPROVE + UPLOAD THIS 1 SHORT';
+          if (check) check.checked = false;
+          upload.style.opacity = '.5';
+
+          const error = document.createElement('div');
+          error.style.cssText =
+            'margin-top:10px;padding:10px;border:1px solid #73343e;border-radius:10px;background:#221015;color:#ffadb6;font-size:.8rem;line-height:1.45';
+          error.textContent = err?.message || String(err);
+          card.appendChild(error);
+        }
+      });
+    });
+  }
+
+  function escapeHtml(value='') {
+    return String(value)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#039;');
+  }
+
+  function escapeAttr(value='') {
+    return escapeHtml(value).replace(/`/g,'&#096;');
+  }
+
+  function wrapUpload() {
+    const yt = window.ClipFreeYouTube;
+    if (!yt?.startFullAutoWithFile) return false;
+    if (yt[WRAP_FLAG]) return true;
+
+    const originalUpload = yt.startFullAutoWithFile.bind(yt);
+
+    yt.startFullAutoWithFile = async function recoveryPreviewUpload(file, meta={}) {
+      // Reviewer evidence page must behave exactly as before.
+      if (reviewerMode()) {
+        return originalUpload(file, meta);
+      }
+
+      return createPreview(file, meta, originalUpload);
+    };
+
+    yt[WRAP_FLAG] = true;
+    return true;
+  }
+
+  function removeBatchControls() {
+    forceOneShort();
+
+    const resume = $('clipfreeResumeBatch');
+    if (resume) resume.remove();
+
+    const legacy20 = $('clipfree20AnimalCard');
+    if (legacy20) legacy20.remove();
+
+    const hero20 = $('clipfree20Hero');
+    if (hero20) hero20.remove();
+  }
+
+  function addRecoveryBanner() {
+    if ($('clipfreeRecoveryBannerV36')) return true;
+
+    const head = document.querySelector('#clipfreeSimpleStudio .simple-head');
+    if (!head) return false;
+
+    const card = document.createElement('div');
+    card.id = 'clipfreeRecoveryBannerV36';
+    card.style.cssText =
+      'margin:12px 0;padding:12px 13px;border:1px solid #8a6a28;border-radius:13px;' +
+      'background:#1b160b;color:#ffe6a3;font-size:.78rem;font-weight:900;line-height:1.5';
+
+    card.textContent =
+      '🛡 RECOVERY MODE v36 • 1 Short only • human preview required • no automatic batch uploads';
+
+    head.appendChild(card);
+    return true;
+  }
+
+  function install() {
+    forceOneShort();
+    updateSimpleCopy();
+    removeBatchControls();
+    wrapUpload();
+    addRecoveryBanner();
+  }
+
+  install();
+
+  const observer = new MutationObserver(() => {
+    forceOneShort();
+    removeBatchControls();
+  });
+
+  observer.observe(document.documentElement, {
+    childList:true,
+    subtree:true
+  });
+
+  const timer = setInterval(() => {
+    install();
+    if (wrapUpload() && addRecoveryBanner()) clearInterval(timer);
+  }, 180);
+
+  setTimeout(() => clearInterval(timer), 30000);
+
+  window.addEventListener('clipfree-youtube-ready', () => setTimeout(install, 0));
+  window.addEventListener('pageshow', install);
+
+  window.CLIPFREE_V36 = {
+    version:'36.0',
+    recoveryMode:true,
+    oneShortOnly:true,
+    humanPreviewRequired:true,
+    batchUploadsDisabled:true,
+    reviewerFlowChanged:false
+  };
+})();
+
+/* CLIPFREE REAL WILD ENCOUNTERS v37 */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const FLAG = '__clipfreeRealWildEncountersV37';
+
+  const WILD = [
+    ['mountain lion',/\b(mountain lion|cougar|puma)\b/i],
+    ['lion',/\b(lion|lioness)\b/i],['tiger',/\btiger\b/i],
+    ['leopard',/\bleopard\b/i],['cheetah',/\bcheetah\b/i],
+    ['jaguar',/\bjaguar\b/i],['wolf',/\b(wolf|wolves)\b/i],
+    ['coyote',/\bcoyote\b/i],['fox',/\bfox\b/i],
+    ['bear',/\b(bear|grizzly|polar bear|black bear|brown bear)\b/i],
+    ['elephant',/\belephant\b/i],['giraffe',/\bgiraffe\b/i],
+    ['zebra',/\bzebra\b/i],['rhino',/\b(rhino|rhinoceros)\b/i],
+    ['hippo',/\b(hippo|hippopotamus)\b/i],['bison',/\b(bison|buffalo)\b/i],
+    ['moose',/\bmoose\b/i],['elk',/\belk\b/i],
+    ['deer',/\b(deer|stag|doe|buck|reindeer|caribou)\b/i],
+    ['antelope',/\b(antelope|gazelle|pronghorn|wildebeest)\b/i],
+    ['kangaroo',/\bkangaroo\b/i],['koala',/\bkoala\b/i],
+    ['otter',/\botter\b/i],['gorilla',/\bgorilla\b/i],
+    ['chimpanzee',/\bchimpanzee\b/i],['orangutan',/\borangutan\b/i],
+    ['hyena',/\b(hyena|hyaena)\b/i],['meerkat',/\bmeerkat\b/i],
+    ['crocodile',/\bcrocodile\b/i],['alligator',/\balligator\b/i],
+    ['turtle',/\b(sea turtle|turtle|tortoise)\b/i],
+    ['snake',/\b(snake|python|cobra|rattlesnake|boa)\b/i],
+    ['eagle',/\beagle\b/i],['hawk',/\bhawk\b/i],
+    ['falcon',/\bfalcon\b/i],['owl',/\bowl\b/i],
+    ['penguin',/\bpenguin\b/i],['shark',/\b(shark|great white|hammerhead)\b/i],
+    ['whale',/\b(whale|orca)\b/i],['dolphin',/\bdolphin\b/i],
+    ['seal',/\b(seal|sea lion)\b/i],['frog',/\b(frog|toad)\b/i],
+    ['butterfly',/\b(monarch butterfly|butterfly)\b/i],
+    ['bee',/\b(bumble ?bee|bumblebee|bee)\b/i]
+  ];
+
+  const REJECT = [
+    /\b(zoo|zoological|enclosure|cage|caged|captive|captivity)\b/i,
+    /\b(aquarium|tank|marine park|theme park)\b/i,
+    /\b(sanctuary|rehab|rehabilitation|rescue center|rescue centre)\b/i,
+    /\b(farm|farmyard|livestock|ranch|stable|barn)\b/i,
+    /\b(pet|pets|domestic|kitten|puppy|dog park)\b/i,
+    /\b(trained|training|circus|performance animal)\b/i,
+    /\b(animation|animated|cartoon|cgi|3d render|illustration)\b/i,
+    /\b(slideshow|still image|photo montage)\b/i,
+    /\b(dead animal|carcass|taxidermy|mounted specimen)\b/i
+  ];
+
+  const POSITIVE = [
+    /\b(wild|wildlife|natural habitat|nature)\b/i,
+    /\b(forest|jungle|savanna|savannah|grassland|desert|wetland|swamp)\b/i,
+    /\b(river|lake|ocean|sea|coast|mountain|tundra|arctic)\b/i,
+    /\b(roaming|walking|running|swimming|flying|hunting|feeding|grazing|foraging)\b/i
+  ];
+
+  function allText(item={}) {
+    return [item.title,item.description,item.subject,item.creator,item.attribution,item.provider,item.sourceUrl]
+      .map(v=>Array.isArray(v)?v.join(' '):String(v||'')).join(' ');
+  }
+
+  function score(item={}) {
+    const t = allText(item);
+    const animal = WILD.find(([,rx])=>rx.test(t));
+    if (!animal) return {ok:false};
+    if (REJECT.some(rx=>rx.test(t))) return {ok:false};
+    return {ok:true,animal:animal[0],score:POSITIVE.reduce((n,rx)=>n+(rx.test(t)?1:0),0)};
+  }
+
+  function reviewerMode() {
+    const q=new URLSearchParams(location.search);
+    return q.get('audit')==='1'||q.get('compliance')==='1'||q.get('review')==='1';
+  }
+
+  function patchSearch() {
+    const yt=window.ClipFreeYouTube;
+    if (!yt?.searchCommonsDownloadable) return false;
+    if (yt[FLAG]) return true;
+    const previous=yt.searchCommonsDownloadable.bind(yt);
+
+    yt.searchCommonsDownloadable=async function(query,limit=12) {
+      const wanted=Math.max(1,Math.min(20,Number(limit||12)));
+      const variants=[query,`${query} wildlife`,`${query} wild`,`${query} natural habitat`,`${query} nature`];
+      const merged=[];
+
+      for (const q of [...new Set(variants)]) {
+        try { merged.push(...(await previous(q,Math.max(12,wanted))||[])); }
+        catch(err){ console.warn('v37 source search pass failed',q,err); }
+
+        const seen=new Set();
+        const good=[];
+        for (const item of merged) {
+          const key=String(item?.fileUrl||item?.sourceUrl||item?.title||'').trim();
+          if (!key||seen.has(key)) continue;
+          seen.add(key);
+          const s=score(item);
+          if (!s.ok) continue;
+          item.__clipfreeWildEncounter=true;
+          item.__clipfreeDetectedAnimal=s.animal;
+          item.__clipfreeWildScore=s.score;
+          good.push(item);
+        }
+        good.sort((a,b)=>(b.__clipfreeWildScore||0)-(a.__clipfreeWildScore||0));
+        if (good.length>=wanted) return good.slice(0,wanted);
+      }
+
+      return merged.filter(x=>score(x).ok).slice(0,wanted);
+    };
+
+    yt[FLAG]=true;
+    return true;
+  }
+
+  function addWildReviewCheckbox() {
+    const root=$('clipfreeRecoveryPreviewV36');
+    if (!root || root.dataset.v37==='1') return false;
+    root.dataset.v37='1';
+
+    const approve=$('clipfreeRecoveryApproveCheckV36');
+    const upload=$('clipfreeRecoveryUploadV36');
+    const label=approve?.closest('label');
+    if (!label||!upload) return false;
+
+    const extra=document.createElement('label');
+    extra.style.cssText='display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:12px;border:1px solid #3e6047;border-radius:12px;background:#0b1710';
+    extra.innerHTML=`<input id="clipfreeRealWildConfirmV37" type="checkbox" style="margin-top:3px;transform:scale(1.25)">
+      <span style="font-size:.84rem;line-height:1.45">I watched this Short and confirm it shows a real wild animal encounter in a natural/outdoor setting — not a zoo, cage, aquarium, pet, farm, animation, slideshow or staged captive performance.</span>`;
+    label.insertAdjacentElement('afterend',extra);
+
+    const wild=$('clipfreeRealWildConfirmV37');
+    const sync=()=>{
+      const ok=Boolean(approve?.checked && wild?.checked);
+      upload.disabled=!ok;
+      upload.style.opacity=ok?'1':'.5';
+    };
+    approve.addEventListener('change',sync);
+    wild.addEventListener('change',sync);
+    sync();
+    return true;
+  }
+
+  function updateUi() {
+    if (reviewerMode()) return;
+    const badge=document.querySelector('#clipfreeSimpleStudio .simple-badge');
+    if (badge) badge.textContent='REAL WILD ENCOUNTERS • HUMAN REVIEW REQUIRED';
+    const h=document.querySelector('#clipfreeSimpleStudio .simple-head h1');
+    if (h) h.innerHTML='Create <span>1 real wild animal encounter</span> at a time.';
+    const p=document.querySelector('#clipfreeSimpleStudio .simple-head p');
+    if (p) p.textContent='ClipFree searches for real wild animals in natural/outdoor settings, creates one Short, then stops so you can watch and approve it before YouTube upload.';
+    const start=$('simpleStart');
+    if (start&&!start.disabled) start.textContent='🦁 CREATE + PREVIEW 1 REAL WILD ENCOUNTER';
+
+    if (!$('clipfreeV37Banner')) {
+      const head=document.querySelector('#clipfreeSimpleStudio .simple-head');
+      if (head) {
+        const card=document.createElement('div');
+        card.id='clipfreeV37Banner';
+        card.style.cssText='margin:12px 0;padding:12px 13px;border:1px solid #3e754e;border-radius:13px;background:#0b1710;color:#b8f6c9;font-size:.78rem;font-weight:900;line-height:1.5';
+        card.textContent='🌿 v37 REAL WILD ENCOUNTERS • captive/domestic/staged sources filtered • human preview is final check';
+        head.appendChild(card);
+      }
+    }
+  }
+
+  function install(){patchSearch();updateUi();addWildReviewCheckbox();}
+  install();
+  new MutationObserver(install).observe(document.documentElement,{childList:true,subtree:true});
+  const timer=setInterval(()=>{install();if(patchSearch()&&$('clipfreeV37Banner'))clearInterval(timer);},180);
+  setTimeout(()=>clearInterval(timer),30000);
+  window.addEventListener('clipfree-youtube-ready',()=>setTimeout(install,0));
+  window.addEventListener('pageshow',install);
+
+  window.CLIPFREE_V37={
+    version:'37.0',
+    realWildEncountersOnly:true,
+    captiveDomesticFilters:true,
+    humanWildEncounterConfirmation:true,
+    recoveryModePreserved:true,
+    reviewerFlowChanged:false
+  };
+})();
