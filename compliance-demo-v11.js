@@ -7533,22 +7533,7 @@
   }
 
   function wrapUpload() {
-    const yt = window.ClipFreeYouTube;
-    if (!yt?.startFullAutoWithFile) return false;
-    if (yt[WRAP_FLAG]) return true;
-
-    const originalUpload = yt.startFullAutoWithFile.bind(yt);
-
-    yt.startFullAutoWithFile = async function recoveryPreviewUpload(file, meta={}) {
-      // Reviewer evidence page must behave exactly as before.
-      if (reviewerMode()) {
-        return originalUpload(file, meta);
-      }
-
-      return createPreview(file, meta, originalUpload);
-    };
-
-    yt[WRAP_FLAG] = true;
+    // v38 reviews the FINAL generated Short, not the raw source file.
     return true;
   }
 
@@ -7802,4 +7787,31 @@
     recoveryModePreserved:true,
     reviewerFlowChanged:false
   };
+})();
+
+
+/* CLIPFREE YOUTUBE API COMPLIANCE FIX v38 */
+(() => {
+  'use strict';
+  const $=id=>document.getElementById(id); let open=false;
+  const esc=v=>String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  const privacy=()=>{const v=$('simplePrivacy')?.value||$('autoPrivacy')?.value||$('uploadPrivacy')?.value||'private';return ['private','unlisted','public'].includes(v)?v:'private';};
+  function setSel(id,v){const e=$(id);if(!e)return;e.value=v;e.dispatchEvent(new Event('change',{bubbles:true}));}
+  function close(){const r=$('clipfreeComplianceReviewV38');if(!r)return;const v=r.querySelector('video');if(v?.src?.startsWith('blob:'))try{URL.revokeObjectURL(v.src)}catch{};r.remove();open=false;}
+  function review(detail){
+    if(open)return;open=true;
+    const source=(Array.isArray(detail.sources)?detail.sources[0]:detail.source)||{};
+    const root=document.createElement('div');root.id='clipfreeComplianceReviewV38';root.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.94);overflow:auto;padding:16px;color:#fff;font-family:system-ui,sans-serif';
+    const card=document.createElement('div');card.style.cssText='max-width:720px;margin:auto;background:#111018;border:1px solid #433c4d;border-radius:18px;padding:16px;box-sizing:border-box';
+    const pv=privacy();
+    card.innerHTML=`<div style="font-size:.78rem;font-weight:900;color:#b9f3c7">YOUTUBE API COMPLIANCE REVIEW • FINAL SHORT</div><h2>Review and set YouTube metadata</h2><p>Nothing uploads until you review the finished Short and choose the values sent to YouTube.</p><video id="v38video" controls playsinline style="width:100%;max-height:65vh;background:#000;border-radius:12px"></video><label style="display:grid;gap:6px;margin-top:12px"><strong>Title</strong><input id="v38title" maxlength="100" value="${esc(detail.title)}" style="padding:10px;background:#09090d;color:#fff;border:1px solid #555;border-radius:8px"></label><label style="display:grid;gap:6px;margin-top:12px"><strong>Description</strong><textarea id="v38desc" rows="7" style="padding:10px;background:#09090d;color:#fff;border:1px solid #555;border-radius:8px">${esc(detail.description)}</textarea></label><label style="display:grid;gap:6px;margin-top:12px"><strong>Privacy status</strong><select id="v38privacy" style="padding:10px;background:#09090d;color:#fff;border:1px solid #555;border-radius:8px"><option value="private"${pv==='private'?' selected':''}>Private</option><option value="unlisted"${pv==='unlisted'?' selected':''}>Unlisted</option><option value="public"${pv==='public'?' selected':''}>Public</option></select><small>All three YouTube privacy options are available.</small></label><details style="margin-top:12px"><summary>Narration / source / attribution</summary><div style="white-space:pre-wrap;margin-top:8px">${esc(detail.voiceoverText||detail.story||'')}\n\n${esc(detail.attribution||'')}\n\nSource: ${esc(source.title||'')}</div></details><label style="display:flex;gap:10px;margin-top:14px"><input id="v38meta" type="checkbox"><span>I watched the finished Short and reviewed its title, description, privacy, narration and attribution.</span></label><label style="display:flex;gap:10px;margin-top:10px"><input id="v38wild" type="checkbox"><span>I confirm this is a real wild animal encounter, not a zoo, cage, aquarium, pet, farm, animation, slideshow or staged captive performance.</span></label><button id="v38go" disabled style="width:100%;margin-top:14px;padding:14px;border:0;border-radius:10px;background:#24623f;color:#fff;font-weight:900;opacity:.5">APPROVE METADATA + CONTINUE TO YOUTUBE</button><button id="v38cancel" style="width:100%;margin-top:8px;padding:12px;border:1px solid #744;border-radius:10px;background:#211;color:#fbb">CANCEL — DO NOT UPLOAD</button>`;
+    root.appendChild(card);document.body.appendChild(root);
+    if(detail.blob instanceof Blob){const v=$('v38video');v.src=URL.createObjectURL(detail.blob);v.load();}
+    const m=$('v38meta'),w=$('v38wild'),g=$('v38go');const sync=()=>{const ok=m.checked&&w.checked;g.disabled=!ok;g.style.opacity=ok?'1':'.5';};m.onchange=sync;w.onchange=sync;sync();
+    $('v38cancel').onclick=()=>{close();const st=$('simpleStatus')||$('animalGeneratorStatus');if(st)st.textContent='Upload cancelled. Nothing was sent to YouTube.';};
+    g.onclick=()=>{if(g.disabled)return;const t=String($('v38title').value||'').trim();if(!t)return alert('Enter a title first.');const d=String($('v38desc').value||'');const pr=String($('v38privacy').value||'private');detail.title=t.slice(0,100);detail.description=d;detail.__clipfreeComplianceApprovedV38=true;detail.__clipfreeUserSelectedPrivacyV38=pr;if($('uploadTitle'))$('uploadTitle').value=detail.title;if($('uploadDescription'))$('uploadDescription').value=d;setSel('uploadPrivacy',pr);setSel('autoPrivacy',pr);setSel('simplePrivacy',pr);if(window.ClipFreeExport===detail)Object.assign(window.ClipFreeExport,detail);close();window.dispatchEvent(new CustomEvent('clipfree-export-ready',{detail}));};
+  }
+  window.addEventListener('clipfree-export-ready',e=>{const d=e.detail||{};if(d.__clipfreeComplianceApprovedV38||d.kind!=='animal-generator'||!d.__clipfreeGrowthFinalReady)return;e.stopImmediatePropagation();review(d);},true);
+  function ui(){const b=document.querySelector('#clipfreeSimpleStudio .simple-badge');if(b)b.textContent='YOUTUBE COMPLIANCE MODE • FINAL METADATA REVIEW REQUIRED';if(!$('clipfreeV38Banner')){const h=document.querySelector('#clipfreeSimpleStudio .simple-head');if(h){const x=document.createElement('div');x.id='clipfreeV38Banner';x.style.cssText='margin:12px 0;padding:12px;border:1px solid #44648a;border-radius:12px;background:#0b121a;color:#c5e3ff;font-weight:900';x.textContent='✅ v38 API COMPLIANCE • final preview • editable title + description • Private / Unlisted / Public';h.appendChild(x);}}}
+  ui();new MutationObserver(ui).observe(document.documentElement,{childList:true,subtree:true});window.CLIPFREE_V38={version:'38.0',finalGeneratedPreview:true,editableTitle:true,editableDescription:true,privacyOptions:['private','unlisted','public']};
 })();

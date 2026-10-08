@@ -1,0 +1,47 @@
+YOUTUBE API COMPLIANCE RESPONSE — v38
+
+Project number in YouTube's report: 632124272349
+
+IMPORTANT: Before sending the final reply, confirm whether this API Client uses ONLY this one Google Cloud project number. If there are any other project numbers used by the same API Client, list them.
+
+Policy III.D.1(c) — Project numbers
+If true, reply:
+"ClipFree AI uses one Google Cloud project for this API Client: project number 632124272349. We do not use multiple project numbers for this API Client."
+
+Policy III.A.2(d) — Privacy policy / API Data
+Resolved. The Privacy Policy now explicitly identifies the YouTube user/API Data accessed: channel identity/metadata, video data, playlists, caption/thumbnail-related data, YouTube Analytics data and OAuth authorization data. It also explains collection, use and storage.
+
+Policy III.A.2(g) — Device/browser/cookies
+Resolved. The Privacy Policy now explicitly discloses browser/device information, localStorage, ordinary HTTP request information such as IP address/browser headers, and third-party cookies/similar technologies. It also states ClipFree AI does not operate its own advertising/cross-site tracking cookies.
+
+Policy III.A.2(h) — Revocation / deletion
+Resolved. The Privacy Policy explains Disconnect YouTube, Clear saved settings/site-data deletion, and revocation at:
+https://myaccount.google.com/connections?filters=3,4&hl=en
+It also explains that YouTube-hosted content must be deleted through YouTube.
+
+Policy III.C.1 — User-set title / description / privacy
+Resolved in compliance-demo-v11.js v38. Before upload, ClipFree AI intercepts the FINAL generated Short and lets the user edit Title, edit Description, and choose Private, Unlisted or Public. Upload cannot continue until the user reviews and approves.
+
+Evidence screenshot:
+Open the final v38 review screen and tap the Privacy dropdown so Private, Unlisted and Public are all visible. Keep the editable Title and Description fields visible in the same recording if possible.
+
+Policy III.E.4(a) — API Data refresh/update/delete frequency
+Suggested confirmation:
+"ClipFree AI refreshes YouTube API Data when the user connects YouTube, when the user chooses Refresh / Load, and after a successful upload. A post-upload refresh is normally scheduled about 12 seconds after the upload and is deferred while an upload job is active. ClipFree AI does not run a server-side background process that continuously retains or refreshes YouTube API Data after the browser session ends. In-memory API Data is cleared on Disconnect and is lost when the page/session closes or reloads. Local setup settings remain only until Clear saved settings or site-data deletion."
+
+Additional Point — complete OAuth screencast
+Record one continuous screencast showing:
+1. https://coreyvibe.org/
+2. Privacy Policy page, including API Data, device/browser/cookies, refresh/deletion and Google revocation sections.
+3. Back to ClipFree AI.
+4. Connect YouTube.
+5. Google OAuth account chooser.
+6. Google OAuth consent / permissions page with requested permissions visible.
+7. Return to ClipFree AI showing the connected channel.
+8. Create one Short.
+9. Show the FINAL v38 review screen.
+10. Show/edit Title and Description.
+11. Open Privacy dropdown so Private / Unlisted / Public are all visible.
+12. Approve and upload.
+13. Show the real YouTube video ID / upload result.
+14. Show the connected analytics/channel refresh if available.

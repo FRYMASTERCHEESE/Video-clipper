@@ -1,0 +1,19 @@
+ClipFree v38 — YOUTUBE API COMPLIANCE FIX
+
+REPLACE:
+1. compliance-demo-v11.js
+2. privacy.html
+3. ai-voiceover.js (included unchanged for completeness)
+
+v38 directly addresses the October 8, 2026 YouTube API Services violations report.
+
+KEY FIX:
+The FINAL generated Short is stopped immediately before YouTube upload. The user can edit Title, edit Description, and choose Private / Unlisted / Public. The user must approve before upload continues.
+
+Privacy Policy now explicitly covers API Data accessed, device/browser/IP/localStorage/cookies, refresh/update/delete frequency, Google revocation, and local deletion.
+
+After upload:
+- fully close old coreyvibe.org tabs
+- reopen https://coreyvibe.org/
+- confirm the v38 API COMPLIANCE banner
+- open https://coreyvibe.org/privacy.html and confirm Last updated: 9 October 2026
