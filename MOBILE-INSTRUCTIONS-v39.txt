@@ -1,0 +1,44 @@
+ClipFree v39 — FAST RESTORE + YOUTUBE COMPLIANCE
+
+WHY
+v36 intentionally removed normal batch/resume controls and later versions were
+stacked on top of it. That made the page look stripped down and added extra DOM
+watchers. v39 restores from the known-good v34 base instead of stacking on v36.
+
+REPLACE THESE FILES:
+1. compliance-demo-v11.js
+2. ai-voiceover.js
+3. privacy.html
+
+RESTORED
+- normal 1–10 Short controls
+- Resume Remaining support
+- source recovery
+- daily upload status
+- source vault
+- SEO/title/caption pipeline
+- existing YouTube connection/upload path
+
+KEPT / IMPROVED
+- unique AI narration v35
+- real-wild source preference
+- final finished-Short preview
+- editable Title
+- editable Description
+- Private / Unlisted / Public
+- explicit Approve + Upload
+- updated privacy policy for YouTube API review
+
+PERFORMANCE
+v39 does NOT include the v36/v37/v38 permanent UI-removal observers.
+It adds no permanent whole-page MutationObserver of its own.
+
+IMPORTANT
+YouTube can still block an upload because of the channel daily upload limit,
+Advanced Features restriction, API project restriction, or other YouTube-side
+limit. ClipFree cannot bypass those limits.
+
+AFTER UPLOAD
+Fully close old coreyvibe.org tabs and reopen the site.
+Look for:
+v39 FAST RESTORE
