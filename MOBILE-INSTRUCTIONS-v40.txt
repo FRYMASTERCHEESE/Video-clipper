@@ -1,0 +1,49 @@
+ClipFree v40 — FAST LOAD
+
+UPLOAD ALL 3 FILES:
+1. compliance-demo-v11.js
+2. clipfree-runtime-v40.js
+3. compliance-demo-review-v39.js
+
+WHY IT IS FASTER
+The old compliance-demo-v11.js had grown to about 263 KB and contained:
+- 23 setInterval loops
+- 59 setTimeout calls
+- 6 MutationObservers
+- 13 pageshow handlers
+
+v40 changes the architecture:
+- normal coreyvibe.org loads a small bootstrap first
+- Resume/source recovery/daily allowance/species-title helpers load lazily after first paint
+- the very large reviewer/audit build loads ONLY when using:
+  ?audit=1
+  ?compliance=1
+  ?review=1
+
+KEPT ON THE NORMAL SITE
+- 1–10 Shorts
+- Resume Remaining
+- wake-lock protection
+- source recovery
+- single-Short animal mismatch retry
+- actual-animal unique title guard
+- truthful daily upload allowance
+- real-wild source filter
+- final finished-Short review
+- editable Title and Description
+- Private / Unlisted / Public selector
+- unique AI narration remains in ai-voiceover.js
+
+YOUTUBE REVIEW
+The full previous reviewer build is preserved in compliance-demo-review-v39.js
+and is loaded only on the review URLs.
+
+IMPORTANT
+Do NOT delete category-pages.js, youtube.js, animal-generator.js,
+upload-speed-boost.js, video-engine-v7.js or ai-voiceover.js.
+
+After upload:
+1. Fully close every coreyvibe.org tab.
+2. Reopen https://coreyvibe.org/
+3. Look for "v40 FAST LOAD".
+4. Test 1 Short first.
