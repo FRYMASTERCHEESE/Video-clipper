@@ -1,4 +1,4 @@
-/* CLIPFREE FAST BOOTSTRAP v40
+/* CLIPFREE FAST BOOTSTRAP v41
    Normal site: tiny first-load layer.
    Reviewer routes: load the preserved full reviewer build only when needed.
 */
@@ -20,6 +20,54 @@ if (__cfReviewer) {
     let runtimeReady = false;
     let reviewOpen = false;
     let wildPatched = false;
+    let reviewHoldButton = null;
+    let reviewHoldTimer = 0;
+    let reviewHoldObserver = null;
+
+    function releaseReviewHold() {
+      if (reviewHoldTimer) clearTimeout(reviewHoldTimer);
+      reviewHoldTimer = 0;
+      try { reviewHoldObserver?.disconnect?.(); } catch {}
+      reviewHoldObserver = null;
+
+      if (reviewHoldButton) {
+        reviewHoldButton.disabled = false;
+        reviewHoldButton = null;
+      }
+    }
+
+    function holdSimpleRunUntilYoutubeResult() {
+      const nativeButton = $('generateAnimalVideo');
+      if (!nativeButton) return;
+
+      reviewHoldButton = nativeButton;
+      nativeButton.disabled = true;
+
+      const releaseOnErrorText = () => {
+        const text = [
+          $('youtubeUploadStatus')?.textContent,
+          $('autoStatusDetail')?.textContent,
+          $('animalGeneratorStatus')?.textContent
+        ].filter(Boolean).join(' ');
+
+        if (/(rejected|failed|needs attention|could not|upload limit|quota|unauthorized|forbidden|invalid grant)/i.test(text)) {
+          releaseReviewHold();
+        }
+      };
+
+      reviewHoldObserver = new MutationObserver(releaseOnErrorText);
+      for (const id of ['youtubeUploadStatus','autoStatusDetail','animalGeneratorStatus']) {
+        const el = $(id);
+        if (el) reviewHoldObserver.observe(el, {subtree:true, childList:true, characterData:true});
+      }
+
+      // Fail-safe only; normal release happens when YouTube returns a video ID
+      // or reports a processing failure.
+      reviewHoldTimer = setTimeout(releaseReviewHold, 10 * 60 * 1000);
+    }
+
+    window.addEventListener('clipfree-youtube-upload-transferred', releaseReviewHold);
+    window.addEventListener('clipfree-youtube-upload-failed', releaseReviewHold);
 
     const WILD = [
       ['mountain lion',/\b(mountain lion|cougar|puma)\b/i],
@@ -138,10 +186,26 @@ if (__cfReviewer) {
     function capTen() {
       const select = $('simpleCount');
       if (!select) return false;
+
+      const previous = Number(select.value || 1);
       [...select.options].forEach(o => {
         if (Number(o.value) > 10) o.remove();
       });
-      if (Number(select.value) > 10) select.value = '10';
+
+      if (previous > 10 || Number(select.value) > 10 || !select.value) {
+        select.value = '10';
+      }
+
+      const h1 = document.querySelector('#clipfreeSimpleStudio .simple-head h1');
+      if (h1) h1.innerHTML = 'Create <span>1–10 Shorts</span> from one screen.';
+
+      const start = $('simpleStart');
+      const n = Math.max(1, Math.min(10, Number(select.value || 1)));
+      if (start && !start.disabled) {
+        start.textContent = `✨ CREATE + SEO + UPLOAD ${n} SHORT${n === 1 ? '' : 'S'}`;
+      }
+
+      select.dispatchEvent(new Event('change', {bubbles:true}));
       return true;
     }
 
@@ -155,7 +219,7 @@ if (__cfReviewer) {
         'margin:10px 0;padding:10px 12px;border:1px solid #3c6d50;border-radius:12px;' +
         'background:#0b1710;color:#b8f6c9;font-size:.76rem;font-weight:900';
       box.textContent =
-        '⚡ v40 FAST LOAD • heavy reviewer code loads only on review URLs • normal uploads + Resume preserved';
+        '⚡ v41 FAST LOAD • heavy reviewer code loads only on review URLs • normal uploads + Resume preserved';
       head.appendChild(box);
       return true;
     }
@@ -252,6 +316,7 @@ if (__cfReviewer) {
     function showReview(detail) {
       if (reviewOpen) return;
       reviewOpen = true;
+      holdSimpleRunUntilYoutubeResult();
 
       const source = (Array.isArray(detail.sources) ? detail.sources[0] : detail.source) || {};
       const pv = privacyValue();
@@ -346,8 +411,12 @@ Source: ${esc(source.title || '')}
 
       $('v40cancel').onclick = () => {
         closeReview();
+        releaseReviewHold();
         const status = $('simpleStatus') || $('animalGeneratorStatus');
-        if (status) status.textContent = 'Upload cancelled. Nothing was sent to YouTube.';
+        if (status) {
+          status.textContent = 'Upload cancelled. Nothing was sent to YouTube.';
+          status.className = 'simple-status bad';
+        }
       };
 
       go.onclick = () => {
@@ -402,7 +471,7 @@ Source: ${esc(source.title || '')}
     });
 
     window.CLIPFREE_V40 = {
-      version:'40.0',
+      version:'41.0',
       fastBootstrap:true,
       reviewerCodeLazy:true,
       runtimeLazy:true,
