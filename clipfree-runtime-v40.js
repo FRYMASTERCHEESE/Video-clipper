@@ -1,4 +1,4 @@
-/* CLIPFREE LAZY RUNTIME v44
+/* CLIPFREE LAZY RUNTIME v40
    Loaded after the page becomes usable, or immediately on first Start.
    Keeps Resume, daily upload truth, 10-Short mobile cap, species titles,
    source recovery and animal mismatch retry without blocking first paint.
@@ -78,23 +78,8 @@
     );
   }
 
-  function humanReviewPending() {
-    let gatePending = 0;
-    try {
-      gatePending = Number(window.CLIPFREE_UPLOAD_APPROVAL_GATE_V42?.pendingCount?.() || 0);
-    } catch {}
-
-    return Boolean(
-      document.getElementById('clipfreeV40Review') ||
-      window.__clipfreeRequireHumanApproval === true ||
-      gatePending > 0
-    );
-  }
-
-  async function waitForRealUploadEvidence(beforeCount, beforeVideoId = '', timeoutMs = 30 * 60 * 1000) {
+  async function waitForRealUploadEvidence(beforeCount, beforeVideoId = '', timeoutMs = 12000) {
     const started = Date.now();
-    let sawHumanReview = false;
-    let reviewClosedAt = 0;
 
     while (Date.now() - started < timeoutMs) {
       const count = transferredCount();
@@ -112,56 +97,13 @@
         return {ok:true, count, videoId:latestId};
       }
 
-      const reviewPending = humanReviewPending();
-      if (reviewPending) {
-        sawHumanReview = true;
-        reviewClosedAt = 0;
-        setStatus(
-          'Finished Short ready ❤️ Review the video, title, description and privacy, tick both boxes, then press APPROVE + UPLOAD TO YOUTUBE.'
-        );
-        await sleep(350);
-        continue;
-      }
-
-      if (sawHumanReview && !reviewClosedAt) {
-        reviewClosedAt = Date.now();
-        setStatus('Final review approved. Waiting for YouTube to return the real video ID…');
-      }
-
-      const failure = exactFailure();
-      if (failure) {
-        return {
-          ok:false,
-          count,
-          videoId:latestId,
-          reason:failure
-        };
-      }
-
-      // Give the final-review screen enough time to appear after encoding.
-      if (!sawHumanReview && Date.now() - started < 45000) {
-        await sleep(350);
-        continue;
-      }
-
-      // After approval, allow the real YouTube upload plenty of time on mobile.
-      if (sawHumanReview && reviewClosedAt && Date.now() - reviewClosedAt < 120000) {
-        await sleep(350);
-        continue;
-      }
-
-      break;
+      await sleep(300);
     }
 
     return {
       ok:false,
       count:transferredCount(),
-      videoId:String(window.ClipFreeLastUpload?.videoId || '').trim(),
-      reason: exactFailure() || (
-        sawHumanReview
-          ? 'No YouTube video ID was returned after final approval.'
-          : 'No final review or YouTube video ID was produced.'
-      )
+      videoId:String(window.ClipFreeLastUpload?.videoId || '').trim()
     };
   }
 
@@ -175,7 +117,7 @@
     ].map(x => String(x || '').trim()).filter(Boolean);
 
     return values.find(x =>
-      /(error|failed|stopped|cancelled|canceled|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|unused source|source validation rejected|metadata does not identify the requested animal|unrelated footage)/i.test(x)
+      /(error|failed|stopped|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|unused source|source validation rejected|metadata does not identify the requested animal|unrelated footage)/i.test(x)
     ) || '';
   }
 
@@ -189,7 +131,9 @@
       m.includes('no suitable') ||
       m.includes('different unused') ||
       m.includes('source validation rejected') ||
-      m.includes('metadata does not identify the requested animal')
+      m.includes('metadata does not identify the requested animal') ||
+      m.includes('no youtube video id') ||
+      m.includes('did not return a video id')
     );
   }
 
@@ -433,7 +377,7 @@
           // youtube.js can return the generator button to idle a moment before
           // the upload event/state is visible to the outer batch runner.
           // Wait briefly for a REAL YouTube ID before declaring failure.
-          const transfer = await waitForRealUploadEvidence(before, beforeVideoId);
+          const transfer = await waitForRealUploadEvidence(before, beforeVideoId, 12000);
           const after = transfer.count;
 
           if (transfer.ok) {
@@ -460,7 +404,7 @@
             continue;
           }
 
-          const reason = transfer.reason || exactFailure() || 'No YouTube video ID was returned.';
+          const reason = exactFailure() || 'No YouTube video ID was returned.';
 
           if (hardFailure(reason)) {
             throw new Error(`Short ${completed + 1}/${requested} stopped: ${reason}`);
@@ -1527,7 +1471,12 @@
       s.includes('cc0') ||
       s.includes('publicdomain/zero') ||
       s.includes('publicdomain/mark') ||
-      s.includes('zero/1.0')
+      (
+        (s.includes('cc by') || s.includes('/licenses/by/')) &&
+        !s.includes('by-sa') &&
+        !s.includes('noncommercial') &&
+        !s.includes('no derivatives')
+      )
     );
   }
 
@@ -1602,7 +1551,7 @@
     };
     Object.entries(p).forEach(([k,v])=>u.searchParams.set(k,v));
 
-    const data=await fetchJson(u.toString(),6500);
+    const data=await fetchJson(u.toString(),11000);
     return (data?.query?.pages||[]).map(page => {
       const info=page?.imageinfo?.[0]||{};
       const meta=info.extmetadata||{};
@@ -1808,35 +1757,25 @@
     repairLegacyHistory();
 
     const wanted=Math.max(1,Math.min(20,Number(limit||20)));
-    const variants=queryVariants(query).slice(0,3);
+    const variants=queryVariants(query);
+
+    // Try several query forms. Return as soon as there is enough usable media.
     const all=[];
 
-    // FAST TIER: Wikimedia Commons first. For the generator we only need one
-    // valid unused source at a time, so do not wait on several slow providers
-    // when Commons already has a matching PD/CC0 video.
-    for(const q of variants) {
-      try {
-        const fast=await commons(q,Math.min(12,wanted));
-        all.push(...fast);
-        const good=unique(all).filter(item=>matches(item,query));
-        if(good.length) return good.slice(0,wanted);
-      } catch(err) {
-        console.warn('Fast Commons source search skipped',q,err);
+    for(const q of variants.slice(0,4)) {
+      const settled=await Promise.allSettled([
+        commons(q,Math.min(18,wanted)),
+        archive(q,Math.min(12,wanted)),
+        loc(q,Math.min(8,wanted)),
+        nasa(q,Math.min(6,wanted))
+      ]);
+
+      for(const r of settled) {
+        if(r.status==='fulfilled') all.push(...r.value);
       }
-    }
 
-    // FALLBACK TIER: Archive + Library of Congress in parallel, once.
-    // NASA is intentionally excluded from routine wildlife search because its
-    // per-item manifests can make a phone wait minutes and rarely improve
-    // ordinary wildlife results.
-    const q=variants[0] || query;
-    const settled=await Promise.allSettled([
-      archive(q,Math.min(8,wanted)),
-      loc(q,Math.min(6,wanted))
-    ]);
-
-    for(const r of settled) {
-      if(r.status==='fulfilled') all.push(...r.value);
+      const good=unique(all).filter(item=>matches(item,query));
+      if(good.length>=Math.min(4,wanted)) return good.slice(0,wanted);
     }
 
     return unique(all).filter(item=>matches(item,query)).slice(0,wanted);
@@ -1854,14 +1793,15 @@
     yt[FLAG]=true;
 
     window.CLIPFREE_SOURCE_RECOVERY_V33={
-      version:'44.0',
+      version:'33.0',
       finalSearch:true,
       legacyTitleHistoryRepaired:true,
       exactUrlDuplicateProtection:true,
       automaticRepositories:[
         'Wikimedia Commons',
         'Internet Archive',
-        'Library of Congress'
+        'Library of Congress',
+        'NASA Image & Video Library'
       ]
     };
 
@@ -2207,22 +2147,3 @@
   };
 })();
 
-
-
-/* CLIPFREE REVIEW-AWARE BATCH v43 */
-window.CLIPFREE_REVIEW_AWARE_BATCH_V43 = {
-  version:'43.0',
-  waitsForHumanReview:true,
-  noFalseSourceRetryWhileReviewing:true,
-  realVideoIdRequired:true
-};
-
-
-/* CLIPFREE FAST SOURCE v44 */
-window.CLIPFREE_FAST_SOURCE_V44 = {
-  version:'44.0',
-  commonsFirst:true,
-  fallbackProviders:['Internet Archive','Library of Congress'],
-  strictRights:'Public Domain / CC0 only',
-  nasaRoutineSearch:false
-};
