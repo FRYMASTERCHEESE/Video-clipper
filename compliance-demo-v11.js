@@ -1,4 +1,4 @@
-/* CLIPFREE FAST BOOTSTRAP v41
+/* CLIPFREE FAST BOOTSTRAP v42
    Normal site: tiny first-load layer.
    Reviewer routes: load the preserved full reviewer build only when needed.
 */
@@ -219,7 +219,7 @@ if (__cfReviewer) {
         'margin:10px 0;padding:10px 12px;border:1px solid #3c6d50;border-radius:12px;' +
         'background:#0b1710;color:#b8f6c9;font-size:.76rem;font-weight:900';
       box.textContent =
-        '⚡ v41 FAST LOAD • heavy reviewer code loads only on review URLs • normal uploads + Resume preserved';
+        '⚡ v42 FAST LOAD • heavy reviewer code loads only on review URLs • normal uploads + Resume preserved';
       head.appendChild(box);
       return true;
     }
@@ -316,6 +316,7 @@ if (__cfReviewer) {
     function showReview(detail) {
       if (reviewOpen) return;
       reviewOpen = true;
+      window.__clipfreeRequireHumanApproval = true;
       holdSimpleRunUntilYoutubeResult();
 
       const source = (Array.isArray(detail.sources) ? detail.sources[0] : detail.source) || {};
@@ -410,6 +411,9 @@ Source: ${esc(source.title || '')}
       sync();
 
       $('v40cancel').onclick = () => {
+        window.__clipfreeRequireHumanApproval = false;
+        window.__clipfreeUploadApprovalTokens = 0;
+        try { window.dispatchEvent(new Event('clipfree-human-upload-cancelled')); } catch {}
         closeReview();
         releaseReviewHold();
         const status = $('simpleStatus') || $('animalGeneratorStatus');
@@ -427,7 +431,13 @@ Source: ${esc(source.title || '')}
         detail.title = title.slice(0,100);
         detail.description = String($('v40desc')?.value || '');
         detail.__clipfreeV40Approved = true;
+        detail.__clipfreeUserApprovedUpload = true;
         detail.__clipfreeUserSelectedPrivacy = String($('v40privacy')?.value || 'private');
+
+        window.__clipfreeRequireHumanApproval = false;
+        window.__clipfreeUploadApprovalTokens =
+          Number(window.__clipfreeUploadApprovalTokens || 0) + 1;
+        try { window.dispatchEvent(new Event('clipfree-human-upload-approved')); } catch {}
 
         if ($('uploadTitle')) $('uploadTitle').value = detail.title;
         if ($('uploadDescription')) $('uploadDescription').value = detail.description;
@@ -471,7 +481,7 @@ Source: ${esc(source.title || '')}
     });
 
     window.CLIPFREE_V40 = {
-      version:'41.0',
+      version:'42.0',
       fastBootstrap:true,
       reviewerCodeLazy:true,
       runtimeLazy:true,
