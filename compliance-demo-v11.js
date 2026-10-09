@@ -152,30 +152,23 @@ if (__cfReviewer) {
       const previous = yt.searchCommonsDownloadable.bind(yt);
       yt.searchCommonsDownloadable = async (query,limit=12) => {
         const wanted = Math.max(1,Math.min(20,Number(limit||12)));
-        const variants = [...new Set([
-          query,
-          `${query} wildlife`,
-          `${query} wild`,
-          `${query} natural habitat`
-        ])];
+        let found = [];
+        try {
+          // v45: previous() already performs query rotation/provider fallback.
+          // One pass prevents 4x nested searches on top of the generator.
+          found = await previous(query, Math.max(wanted,12));
+        } catch (err) {
+          console.warn('v45 source search pass failed',err);
+        }
 
         const seen = new Set();
         const good = [];
-
-        for (const q of variants) {
-          let found = [];
-          try { found = await previous(q, Math.max(wanted,12)); }
-          catch (err) { console.warn('v40 source search pass failed',err); }
-
-          for (const item of found || []) {
-            const key = String(item?.fileUrl || item?.sourceUrl || item?.title || '').trim();
-            if (!key || seen.has(key) || !isRealWild(item)) continue;
-            seen.add(key);
-            good.push(item);
-          }
-          if (good.length >= wanted) break;
+        for (const item of found || []) {
+          const key = String(item?.fileUrl || item?.sourceUrl || item?.title || '').trim();
+          if (!key || seen.has(key) || !isRealWild(item)) continue;
+          seen.add(key);
+          good.push(item);
         }
-
         return good.slice(0,wanted);
       };
 
@@ -219,7 +212,7 @@ if (__cfReviewer) {
         'margin:10px 0;padding:10px 12px;border:1px solid #3c6d50;border-radius:12px;' +
         'background:#0b1710;color:#b8f6c9;font-size:.76rem;font-weight:900';
       box.textContent =
-        '⚡ v44 FAST LOAD • faster PD/CC0 source search • human review + SEO + Resume preserved';
+        '⚡ v45 FAST LOAD • one-pass source search • human review + SEO + Resume preserved';
       head.appendChild(box);
       return true;
     }
@@ -227,7 +220,7 @@ if (__cfReviewer) {
     function loadRuntime() {
       if (runtimePromise) return runtimePromise;
 
-      runtimePromise = import('./clipfree-runtime-v40.js?v=20261010-runtime44')
+      runtimePromise = import('./clipfree-runtime-v40.js?v=20261010-runtime45')
         .then(() => {
           runtimeReady = true;
           capTen();
@@ -481,7 +474,7 @@ Source: ${esc(source.title || '')}
     });
 
     window.CLIPFREE_V40 = {
-      version:'44.0',
+      version:'45.0',
       fastBootstrap:true,
       reviewerCodeLazy:true,
       runtimeLazy:true,
