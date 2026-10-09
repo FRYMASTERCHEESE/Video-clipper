@@ -602,14 +602,32 @@ async function fetchUploadVideos(playlistId, limit = 100) {
 }
 
 
-async function getUploadedSourceUrls(limit = 500) {
+let uploadedSourceUrlCache = { at:0, limit:0, urls:[] };
+
+async function getUploadedSourceUrls(limit = 100) {
+  const wanted = Math.max(1, Math.min(100, Number(limit) || 100));
+  const now = Date.now();
+
+  // Source URLs do not need a full channel rescan for every Short.
+  if (
+    uploadedSourceUrlCache.urls.length &&
+    uploadedSourceUrlCache.limit >= wanted &&
+    now - uploadedSourceUrlCache.at < 5 * 60 * 1000
+  ) {
+    return uploadedSourceUrlCache.urls;
+  }
+
   if (!state.channel) await refreshAllChannelData();
   const uploadsId = state.channel?.contentDetails?.relatedPlaylists?.uploads;
   if (!uploadsId) return [];
 
-  const videos = await fetchUploadVideos(uploadsId, Math.max(1, Math.min(500, Number(limit) || 500)));
-  const urls = new Set();
+  // Reuse already-loaded channel videos first. Only fetch deeper when needed.
+  let videos = Array.isArray(state.videos) ? state.videos.slice(0,wanted) : [];
+  if (videos.length < Math.min(wanted, 50)) {
+    videos = await fetchUploadVideos(uploadsId, wanted);
+  }
 
+  const urls = new Set();
   for (const video of videos) {
     const description = String(video?.snippet?.description || '');
     const matches = description.match(/https?:\/\/[^\s<>"')\]]+/gi) || [];
@@ -625,7 +643,12 @@ async function getUploadedSourceUrls(limit = 500) {
     }
   }
 
-  return [...urls];
+  uploadedSourceUrlCache = {
+    at:now,
+    limit:wanted,
+    urls:[...urls]
+  };
+  return uploadedSourceUrlCache.urls;
 }
 
 async function fetchPlaylists() {
