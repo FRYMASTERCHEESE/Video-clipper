@@ -219,7 +219,7 @@ if (__cfReviewer) {
         'margin:10px 0;padding:10px 12px;border:1px solid #3c6d50;border-radius:12px;' +
         'background:#0b1710;color:#b8f6c9;font-size:.76rem;font-weight:900';
       box.textContent =
-        '⚡ v42 FAST LOAD • heavy reviewer code loads only on review URLs • normal uploads + Resume preserved';
+        '⚡ v43 FAST LOAD • human review + real video-ID batch flow • SEO + Resume preserved';
       head.appendChild(box);
       return true;
     }
@@ -227,7 +227,7 @@ if (__cfReviewer) {
     function loadRuntime() {
       if (runtimePromise) return runtimePromise;
 
-      runtimePromise = import('./clipfree-runtime-v40.js?v=20261009-runtime40')
+      runtimePromise = import('./clipfree-runtime-v40.js?v=20261010-runtime43')
         .then(() => {
           runtimeReady = true;
           capTen();
@@ -481,7 +481,7 @@ Source: ${esc(source.title || '')}
     });
 
     window.CLIPFREE_V40 = {
-      version:'42.0',
+      version:'43.0',
       fastBootstrap:true,
       reviewerCodeLazy:true,
       runtimeLazy:true,
