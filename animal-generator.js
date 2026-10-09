@@ -353,7 +353,7 @@ async function mediaSha256(file){
 async function blockedSourceSet(){
   const blocked=loadSourceHistory();
   try{
-    const urls=await window.ClipFreeYouTube?.getUploadedSourceUrls?.(500);
+    const urls=await window.ClipFreeYouTube?.getUploadedSourceUrls?.(100);
     for(const url of urls || []) blocked.add(String(url));
   }catch(err){ console.warn('Could not scan old YouTube source URLs',err); }
   return blocked;
@@ -370,31 +370,30 @@ function nextVarietyQueries(count){
 }
 
 async function findOneUnusedSource(query,blocked,alreadyChosen){
-  const variants=[
-    query,
-    `${query} nature`,
-    `${query} habitat`,
-    `${query} public domain`,
-    `${query} animal behavior`
-  ];
-  for(const q of variants){
-    let results=[];
-    try{ results=await window.ClipFreeYouTube.searchCommonsDownloadable(q,20); }catch(err){ console.warn('Source search skipped',q,err); }
-    const candidates = uniqueSuitableSources(results)
-      .filter(item => sourceMatchesAnimalQuery(item, query))
-      .sort((a,b) => {
-        if (window.CLIPFREE_COMPLIANCE_RECORDING_MODE) {
-          return Number(a?.size || 999999999) - Number(b?.size || 999999999);
-        }
-        return 0;
-      });
+  // v45: ONE source-search call. The v44 runtime already rotates query forms
+  // and providers, so doing another 5x loop here multiplied requests and could
+  // leave mobile users waiting many minutes.
+  let results=[];
+  try{
+    results=await window.ClipFreeYouTube.searchCommonsDownloadable(query,12);
+  }catch(err){
+    console.warn('Source search skipped',query,err);
+  }
 
-    for(const item of candidates){
-      const keys=sourceKeys(item);
-      const key=keys[0] || '';
-      if(!key || keys.some(k=>blocked.has(k) || alreadyChosen.has(k))) continue;
-      return item;
-    }
+  const candidates = uniqueSuitableSources(results)
+    .filter(item => sourceMatchesAnimalQuery(item, query))
+    .sort((a,b) => {
+      // Prefer smaller files on phones for faster download/render.
+      const as=Number(a?.size || 999999999);
+      const bs=Number(b?.size || 999999999);
+      return as-bs;
+    });
+
+  for(const item of candidates){
+    const keys=sourceKeys(item);
+    const key=keys[0] || '';
+    if(!key || keys.some(k=>blocked.has(k) || alreadyChosen.has(k))) continue;
+    return item;
   }
   return null;
 }
