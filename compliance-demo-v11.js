@@ -219,7 +219,7 @@ if (__cfReviewer) {
         'margin:10px 0;padding:10px 12px;border:1px solid #3c6d50;border-radius:12px;' +
         'background:#0b1710;color:#b8f6c9;font-size:.76rem;font-weight:900';
       box.textContent =
-        '⚡ v42 FAST LOAD • heavy reviewer code loads only on review URLs • normal uploads + Resume preserved';
+        '⚡ v46 STABLE LOAD • one-Short path restored • SEO + final review + approval gate preserved';
       head.appendChild(box);
       return true;
     }
@@ -233,6 +233,7 @@ if (__cfReviewer) {
           capTen();
           installWildFilter();
           addBanner();
+          enableStableSingleMode();
           window.CLIPFREE_V40.runtimeReady = true;
         })
         .catch(err => {
@@ -460,6 +461,67 @@ Source: ${esc(source.title || '')}
       showReview(detail);
     }, true);
 
+    // ---------------- v46 stable recovery ----------------
+    // Multi-Short resume was the source of the current 30+ minute hangs.
+    // Restore the known-good one-Short path while keeping all SEO, source,
+    // narration, final-review and YouTube approval protections.
+    function enableStableSingleMode() {
+      try { localStorage.removeItem('clipfree_batch_checkpoint_v19'); } catch {}
+
+      const select = $('simpleCount');
+      if (select) {
+        [...select.options].forEach(o => {
+          if (Number(o.value) !== 1) o.remove();
+        });
+        if (![...select.options].some(o => String(o.value) === '1')) {
+          const o = document.createElement('option');
+          o.value = '1';
+          o.textContent = '1 Short';
+          select.appendChild(o);
+        }
+        select.value = '1';
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+
+      $('clipfreeResumeBatch')?.remove();
+
+      const h1 = document.querySelector('#clipfreeSimpleStudio .simple-head h1');
+      if (h1) h1.innerHTML = 'Create <span>1 Short</span> safely from one screen.';
+
+      const start = $('simpleStart');
+      if (start && !start.disabled) {
+        start.textContent = '🚀 CREATE + SEO + UPLOAD 1 SHORT NOW';
+      }
+
+      const status = $('simpleStatus');
+      if (status && /Short 1\/\d+|completed|remaining/i.test(status.textContent || '')) {
+        status.textContent = 'Ready. Stable one-Short mode is active. Create one Short, review it, then approve the YouTube upload.';
+        status.className = 'simple-status';
+      }
+
+      let badge = $('clipfreeStableSingleV46');
+      if (!badge) {
+        const head = document.querySelector('#clipfreeSimpleStudio .simple-head');
+        if (head) {
+          badge = document.createElement('div');
+          badge.id = 'clipfreeStableSingleV46';
+          badge.style.cssText =
+            'margin:10px 0;padding:10px 12px;border:1px solid #3c6d50;border-radius:12px;' +
+            'background:#0b1710;color:#b8f6c9;font-size:.76rem;font-weight:900';
+          badge.textContent =
+            '✅ v46 STABLE MODE • 1 Short at a time • full SEO + final review + approval gate preserved';
+          head.appendChild(badge);
+        }
+      }
+
+      return true;
+    }
+
+    enableStableSingleMode();
+    window.addEventListener('pageshow', enableStableSingleMode);
+    setTimeout(enableStableSingleMode, 500);
+    setTimeout(enableStableSingleMode, 1600);
+
     // Fast first paint: only poll briefly for UI creation; no permanent observer.
     let tries = 0;
     const uiTimer = setInterval(() => {
@@ -481,7 +543,7 @@ Source: ${esc(source.title || '')}
     });
 
     window.CLIPFREE_V40 = {
-      version:'42.0',
+      version:'46.0',
       fastBootstrap:true,
       reviewerCodeLazy:true,
       runtimeLazy:true,
