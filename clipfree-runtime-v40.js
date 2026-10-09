@@ -1,4 +1,4 @@
-/* CLIPFREE LAZY RUNTIME v40
+/* CLIPFREE LAZY RUNTIME v43
    Loaded after the page becomes usable, or immediately on first Start.
    Keeps Resume, daily upload truth, 10-Short mobile cap, species titles,
    source recovery and animal mismatch retry without blocking first paint.
@@ -78,8 +78,23 @@
     );
   }
 
-  async function waitForRealUploadEvidence(beforeCount, beforeVideoId = '', timeoutMs = 12000) {
+  function humanReviewPending() {
+    let gatePending = 0;
+    try {
+      gatePending = Number(window.CLIPFREE_UPLOAD_APPROVAL_GATE_V42?.pendingCount?.() || 0);
+    } catch {}
+
+    return Boolean(
+      document.getElementById('clipfreeV40Review') ||
+      window.__clipfreeRequireHumanApproval === true ||
+      gatePending > 0
+    );
+  }
+
+  async function waitForRealUploadEvidence(beforeCount, beforeVideoId = '', timeoutMs = 30 * 60 * 1000) {
     const started = Date.now();
+    let sawHumanReview = false;
+    let reviewClosedAt = 0;
 
     while (Date.now() - started < timeoutMs) {
       const count = transferredCount();
@@ -97,13 +112,56 @@
         return {ok:true, count, videoId:latestId};
       }
 
-      await sleep(300);
+      const reviewPending = humanReviewPending();
+      if (reviewPending) {
+        sawHumanReview = true;
+        reviewClosedAt = 0;
+        setStatus(
+          'Finished Short ready ❤️ Review the video, title, description and privacy, tick both boxes, then press APPROVE + UPLOAD TO YOUTUBE.'
+        );
+        await sleep(350);
+        continue;
+      }
+
+      if (sawHumanReview && !reviewClosedAt) {
+        reviewClosedAt = Date.now();
+        setStatus('Final review approved. Waiting for YouTube to return the real video ID…');
+      }
+
+      const failure = exactFailure();
+      if (failure) {
+        return {
+          ok:false,
+          count,
+          videoId:latestId,
+          reason:failure
+        };
+      }
+
+      // Give the final-review screen enough time to appear after encoding.
+      if (!sawHumanReview && Date.now() - started < 45000) {
+        await sleep(350);
+        continue;
+      }
+
+      // After approval, allow the real YouTube upload plenty of time on mobile.
+      if (sawHumanReview && reviewClosedAt && Date.now() - reviewClosedAt < 120000) {
+        await sleep(350);
+        continue;
+      }
+
+      break;
     }
 
     return {
       ok:false,
       count:transferredCount(),
-      videoId:String(window.ClipFreeLastUpload?.videoId || '').trim()
+      videoId:String(window.ClipFreeLastUpload?.videoId || '').trim(),
+      reason: exactFailure() || (
+        sawHumanReview
+          ? 'No YouTube video ID was returned after final approval.'
+          : 'No final review or YouTube video ID was produced.'
+      )
     };
   }
 
@@ -117,7 +175,7 @@
     ].map(x => String(x || '').trim()).filter(Boolean);
 
     return values.find(x =>
-      /(error|failed|stopped|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|unused source|source validation rejected|metadata does not identify the requested animal|unrelated footage)/i.test(x)
+      /(error|failed|stopped|cancelled|canceled|could not|cannot|can't|quota|limit|unauthor|forbidden|invalid|still-picture|repeated-frame|moving replacement|no suitable|unused source|source validation rejected|metadata does not identify the requested animal|unrelated footage)/i.test(x)
     ) || '';
   }
 
@@ -131,9 +189,7 @@
       m.includes('no suitable') ||
       m.includes('different unused') ||
       m.includes('source validation rejected') ||
-      m.includes('metadata does not identify the requested animal') ||
-      m.includes('no youtube video id') ||
-      m.includes('did not return a video id')
+      m.includes('metadata does not identify the requested animal')
     );
   }
 
@@ -377,7 +433,7 @@
           // youtube.js can return the generator button to idle a moment before
           // the upload event/state is visible to the outer batch runner.
           // Wait briefly for a REAL YouTube ID before declaring failure.
-          const transfer = await waitForRealUploadEvidence(before, beforeVideoId, 12000);
+          const transfer = await waitForRealUploadEvidence(before, beforeVideoId);
           const after = transfer.count;
 
           if (transfer.ok) {
@@ -404,7 +460,7 @@
             continue;
           }
 
-          const reason = exactFailure() || 'No YouTube video ID was returned.';
+          const reason = transfer.reason || exactFailure() || 'No YouTube video ID was returned.';
 
           if (hardFailure(reason)) {
             throw new Error(`Short ${completed + 1}/${requested} stopped: ${reason}`);
@@ -2147,3 +2203,12 @@
   };
 })();
 
+
+
+/* CLIPFREE REVIEW-AWARE BATCH v43 */
+window.CLIPFREE_REVIEW_AWARE_BATCH_V43 = {
+  version:'43.0',
+  waitsForHumanReview:true,
+  noFalseSourceRetryWhileReviewing:true,
+  realVideoIdRequired:true
+};
