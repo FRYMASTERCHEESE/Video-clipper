@@ -83,7 +83,23 @@ function buildMeta(preset,style,customTopic,sources,sound=null,batchIndex=0,dura
 
 function renderSources(items){ if(!sourceResults) return; if(!items.length){ sourceResults.innerHTML='<div class="notice subtle">No suitable sources found yet.</div>'; return; } sourceResults.innerHTML=items.map(item=>`<article class="animal-source-item">${item.thumbUrl ? `<img src="${esc(item.thumbUrl)}" alt="" loading="lazy" />` : ''}<div><strong>${esc(item.title)}</strong><small>${esc(item.creator)} • ${esc(item.license)}${item.size ? ` • ${(item.size/1024/1024).toFixed(1)} MB` : ''}</small><a href="${esc(item.sourceUrl)}" target="_blank" rel="noopener">Review source</a></div></article>`).join(''); }
 
-async function downloadSource(item,index){ const response=await fetch(item.fileUrl,{mode:'cors',cache:'no-store'}); if(!response.ok) throw new Error(`Source ${index+1} could not be downloaded (${response.status}).`); const blob=await response.blob(); if(blob.size>35*1024*1024) throw new Error('One source clip is too large for reliable phone processing. Try again for a different set.'); const ext=item.title.match(/\.([a-z0-9]{2,5})$/i)?.[1] || (item.mime?.includes('mp4')?'mp4':item.mime?.includes('ogg')?'ogv':'webm'); return new File([blob],`animal_source_${index}.${ext}`,{type:item.mime || blob.type || 'video/webm'}); }
+async function downloadSource(item,index){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),60000);
+  try{
+    const response=await fetch(item.fileUrl,{mode:'cors',cache:'no-store',signal:controller.signal});
+    if(!response.ok) throw new Error(`Source ${index+1} could not be downloaded (${response.status}).`);
+    const blob=await response.blob();
+    if(blob.size>35*1024*1024) throw new Error('One source clip is too large for reliable phone processing. Try again for a different set.');
+    const ext=item.title.match(/\.([a-z0-9]{2,5})$/i)?.[1] || (item.mime?.includes('mp4')?'mp4':item.mime?.includes('ogg')?'ogv':'webm');
+    return new File([blob],`animal_source_${index}.${ext}`,{type:item.mime || blob.type || 'video/webm'});
+  }catch(err){
+    if(err?.name==='AbortError') throw new Error('This source download stalled for 60 seconds, so ClipFree skipped it and will try another source.');
+    throw err;
+  }finally{
+    clearTimeout(timer);
+  }
+}
 
 function uniqueSuitableSources(items){ const seen=new Set(); return (items || []).filter(item=>{ const key=String(item?.sourceUrl || item?.fileUrl || item?.title || '').trim(); if(!key || seen.has(key)) return false; seen.add(key); return !item.size || item.size <= 28*1024*1024; }); }
 
