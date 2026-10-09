@@ -1,4 +1,4 @@
-/* CLIPFREE LAZY RUNTIME v43
+/* CLIPFREE LAZY RUNTIME v44
    Loaded after the page becomes usable, or immediately on first Start.
    Keeps Resume, daily upload truth, 10-Short mobile cap, species titles,
    source recovery and animal mismatch retry without blocking first paint.
@@ -1527,12 +1527,7 @@
       s.includes('cc0') ||
       s.includes('publicdomain/zero') ||
       s.includes('publicdomain/mark') ||
-      (
-        (s.includes('cc by') || s.includes('/licenses/by/')) &&
-        !s.includes('by-sa') &&
-        !s.includes('noncommercial') &&
-        !s.includes('no derivatives')
-      )
+      s.includes('zero/1.0')
     );
   }
 
@@ -1607,7 +1602,7 @@
     };
     Object.entries(p).forEach(([k,v])=>u.searchParams.set(k,v));
 
-    const data=await fetchJson(u.toString(),11000);
+    const data=await fetchJson(u.toString(),6500);
     return (data?.query?.pages||[]).map(page => {
       const info=page?.imageinfo?.[0]||{};
       const meta=info.extmetadata||{};
@@ -1813,25 +1808,35 @@
     repairLegacyHistory();
 
     const wanted=Math.max(1,Math.min(20,Number(limit||20)));
-    const variants=queryVariants(query);
-
-    // Try several query forms. Return as soon as there is enough usable media.
+    const variants=queryVariants(query).slice(0,3);
     const all=[];
 
-    for(const q of variants.slice(0,4)) {
-      const settled=await Promise.allSettled([
-        commons(q,Math.min(18,wanted)),
-        archive(q,Math.min(12,wanted)),
-        loc(q,Math.min(8,wanted)),
-        nasa(q,Math.min(6,wanted))
-      ]);
-
-      for(const r of settled) {
-        if(r.status==='fulfilled') all.push(...r.value);
+    // FAST TIER: Wikimedia Commons first. For the generator we only need one
+    // valid unused source at a time, so do not wait on several slow providers
+    // when Commons already has a matching PD/CC0 video.
+    for(const q of variants) {
+      try {
+        const fast=await commons(q,Math.min(12,wanted));
+        all.push(...fast);
+        const good=unique(all).filter(item=>matches(item,query));
+        if(good.length) return good.slice(0,wanted);
+      } catch(err) {
+        console.warn('Fast Commons source search skipped',q,err);
       }
+    }
 
-      const good=unique(all).filter(item=>matches(item,query));
-      if(good.length>=Math.min(4,wanted)) return good.slice(0,wanted);
+    // FALLBACK TIER: Archive + Library of Congress in parallel, once.
+    // NASA is intentionally excluded from routine wildlife search because its
+    // per-item manifests can make a phone wait minutes and rarely improve
+    // ordinary wildlife results.
+    const q=variants[0] || query;
+    const settled=await Promise.allSettled([
+      archive(q,Math.min(8,wanted)),
+      loc(q,Math.min(6,wanted))
+    ]);
+
+    for(const r of settled) {
+      if(r.status==='fulfilled') all.push(...r.value);
     }
 
     return unique(all).filter(item=>matches(item,query)).slice(0,wanted);
@@ -1849,15 +1854,14 @@
     yt[FLAG]=true;
 
     window.CLIPFREE_SOURCE_RECOVERY_V33={
-      version:'33.0',
+      version:'44.0',
       finalSearch:true,
       legacyTitleHistoryRepaired:true,
       exactUrlDuplicateProtection:true,
       automaticRepositories:[
         'Wikimedia Commons',
         'Internet Archive',
-        'Library of Congress',
-        'NASA Image & Video Library'
+        'Library of Congress'
       ]
     };
 
@@ -2211,4 +2215,14 @@ window.CLIPFREE_REVIEW_AWARE_BATCH_V43 = {
   waitsForHumanReview:true,
   noFalseSourceRetryWhileReviewing:true,
   realVideoIdRequired:true
+};
+
+
+/* CLIPFREE FAST SOURCE v44 */
+window.CLIPFREE_FAST_SOURCE_V44 = {
+  version:'44.0',
+  commonsFirst:true,
+  fallbackProviders:['Internet Archive','Library of Congress'],
+  strictRights:'Public Domain / CC0 only',
+  nasaRoutineSearch:false
 };
